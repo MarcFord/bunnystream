@@ -1,0 +1,49 @@
+name: Code Quality
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+
+    - name: Install dependencies
+      run: |
+        uv sync --all-extras
+
+    - name: Check code formatting with black
+      run: |
+        uv run black --check --diff src/ tests/
+
+    - name: Check import sorting with isort
+      run: |
+        uv run isort --check-only --diff src/ tests/
+
+    - name: Lint with pylint
+      run: |
+        uv run pylint src/bunnystream/ --output-format=text
+
+    - name: Type check with mypy
+      run: |
+        uv run mypy src/bunnystream/
+
+    - name: Security check with bandit
+      run: |
+        uv run bandit -r src/bunnystream/
+
+    - name: Check for common issues with flake8
+      run: |
+        uv run flake8 src/ tests/
