@@ -8,12 +8,14 @@ integrate event-driven architecture into their applications with minimal setup.
 
 # Dynamic version detection
 try:
-    from importlib.metadata import version, PackageNotFoundError
+    from importlib.metadata import PackageNotFoundError, version
+
     __version__ = version("bunnystream")
 except ImportError:
     # Python < 3.8
     try:
-        from importlib_metadata import version, PackageNotFoundError
+        from importlib_metadata import PackageNotFoundError, version
+
         __version__ = version("bunnystream")
     except ImportError:
         __version__ = "0.0.1-dev"
@@ -22,23 +24,42 @@ except (PackageNotFoundError, Exception):  # pylint: disable=broad-exception-cau
     __version__ = "0.0.1-dev"
 
 # Import main components
-from .warren import Warren
-from .logger import bunny_logger, get_bunny_logger, configure_bunny_logger
+from .config import BunnyStreamConfig
 from .exceptions import (
-    RabbitPortError, RabbitHostError, RabbitVHostError,
-    RabbitCredentialsError, ExcangeNameError
+    BunnyStreamConfigurationError,
+    BunnyStreamModeError,
+    ExcangeNameError,
+    InvalidTCPOptionsError,
+    PrefetchCountError,
+    RabbitCredentialsError,
+    RabbitHostError,
+    RabbitPortError,
+    RabbitVHostError,
+    SSLOptionsError,
+    SubscriptionsNotSetError,
 )
+from .logger import bunny_logger, configure_bunny_logger, get_bunny_logger
+from .subscription import Subscription
+from .warren import Warren
 
 # Define what gets imported with "from bunnystream import *"
 __all__ = [
     "Warren",
+    "BunnyStreamConfig",
+    "Subscription",
     "bunny_logger",
     "get_bunny_logger",
     "configure_bunny_logger",
     "RabbitPortError",
-    "RabbitHostError", 
+    "RabbitHostError",
     "RabbitVHostError",
     "RabbitCredentialsError",
     "ExcangeNameError",
-    "__version__"
+    "PrefetchCountError",
+    "BunnyStreamModeError",
+    "SSLOptionsError",
+    "InvalidTCPOptionsError",
+    "BunnyStreamConfigurationError",
+    "SubscriptionsNotSetError",
+    "__version__",
 ]

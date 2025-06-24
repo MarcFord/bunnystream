@@ -28,10 +28,12 @@ uv add bunnystream
 ### Basic Usage
 
 ```python
-from bunnystream import Warren
+from bunnystream import BunnyStreamConfig, Warren
 
-# Create a Warren instance with explicit parameters
-warren = Warren(
+# Create configuration
+config = BunnyStreamConfig(
+    mode="producer",  # or "consumer"
+    exchange_name="my_exchange",
     rabbit_host="localhost",
     rabbit_port=5672,
     rabbit_vhost="/",
@@ -39,8 +41,35 @@ warren = Warren(
     rabbit_pass="guest"
 )
 
-# Get the AMQP connection URL
-print(warren.url)  # amqp://guest:guest@localhost:5672//
+# Create Warren instance
+warren = Warren(config)
+
+# Access connection parameters
+connection_params = warren.connection_parameters
+print(f"Connecting to {config.rabbit_host}:{config.rabbit_port}")
+```
+
+### Using Configuration Objects
+
+```python
+from bunnystream import BunnyStreamConfig, Warren
+
+# Minimal configuration (uses defaults)
+config = BunnyStreamConfig(mode="producer")
+warren = Warren(config)
+
+# Configuration with custom settings
+config = BunnyStreamConfig(
+    mode="consumer",
+    exchange_name="events",
+    rabbit_host="rabbitmq.example.com",
+    rabbit_port=5673
+)
+warren = Warren(config)
+
+# Modify configuration after creation
+warren.config.rabbit_host = "new-host.com"
+warren.bunny_mode = "producer"  # Change mode
 ```
 
 ### Environment Variable Configuration
@@ -52,21 +81,76 @@ export RABBITMQ_URL="amqp://myuser:mypass@rabbit.example.com:5673/myvhost"
 ```
 
 ```python
-from bunnystream import Warren
+from bunnystream import BunnyStreamConfig, Warren
 
-# Warren will automatically parse RABBITMQ_URL
-warren = Warren()
+# Configuration will automatically parse RABBITMQ_URL
+config = BunnyStreamConfig(mode="producer")
+warren = Warren(config)
 
-print(warren.rabbit_host)  # rabbit.example.com
-print(warren.rabbit_port)  # 5673
-print(warren.rabbit_user)  # myuser
-print(warren.rabbit_pass)  # mypass
-print(warren.rabbit_vhost) # /myvhost
+print(config.rabbit_host)  # rabbit.example.com
+print(config.rabbit_port)  # 5673
+print(config.rabbit_user)  # myuser
+print(config.rabbit_pass)  # mypass
+print(config.rabbit_vhost) # /myvhost
 ```
 
 ### Constructor Parameters Override Environment
 
 You can override specific parameters while using others from the environment:
+
+```python
+from bunnystream import BunnyStreamConfig, Warren
+
+# Override host and port, but use environment for credentials
+config = BunnyStreamConfig(
+    mode="producer",
+    rabbit_host="localhost",  # Override environment
+    rabbit_port=5672,         # Override environment
+    # rabbit_user and rabbit_pass will come from RABBITMQ_URL
+)
+warren = Warren(config)
+```
+
+### Advanced Configuration
+
+```python
+from bunnystream import BunnyStreamConfig, Warren, Subscription
+from pika.exchange_type import ExchangeType
+
+# Create configuration with advanced settings
+config = BunnyStreamConfig(
+    mode="consumer",
+    exchange_name="events",
+    rabbit_host="localhost",
+    rabbit_port=5672
+)
+
+# Configure advanced connection parameters
+config.heartbeat = 600
+config.connection_attempts = 3
+config.retry_delay = 5.0
+config.prefetch_count = 10  # For consumers
+
+# Add multiple subscriptions (for consumers)
+subscription1 = Subscription(
+    exchange_name="events",
+    exchange_type=ExchangeType.topic,
+    topics=["user.*", "order.*"]
+)
+subscription2 = Subscription(
+    exchange_name="notifications",
+    exchange_type=ExchangeType.direct
+)
+
+config.add_subscription(subscription1)
+config.add_subscription(subscription2)
+
+# Create Warren instance
+warren = Warren(config)
+
+# Access connection parameters for pika
+connection_params = warren.connection_parameters
+```
 
 ```python
 import os
