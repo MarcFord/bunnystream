@@ -1,0 +1,31 @@
+[MAIN]
+
+[MESSAGES CONTROL]
+# Disable specific warnings that are design choices for this project
+disable=
+    too-many-lines,           # C0302: Module config.py is intentionally comprehensive
+    too-many-instance-attributes,  # R0902: Configuration class needs many attributes
+    too-many-arguments,       # R0913: Configuration constructor needs many parameters
+    too-many-positional-arguments, # R0917: Related to too-many-arguments
+    too-many-statements,      # R0915: Constructor logic is necessarily complex
+    too-many-public-methods,  # R0904: Configuration class provides many property accessors
+    invalid-name              # C0103: TOPIC, EXCHANGE, EXCHANGE_TYPE are valid constants
+
+[FORMAT]
+max-line-length=100
+
+[DESIGN]
+# Set reasonable limits for the project
+max-args=8
+max-locals=20
+max-returns=6
+max-branches=15
+max-statements=60
+max-parents=7
+max-attributes=45
+max-public-methods=30
+max-bool-expr=5
+
+[BASIC]
+# Allow constants like TOPIC, EXCHANGE, EXCHANGE_TYPE
+const-rgx=(([A-Z_][A-Z0-9_]*)|(__.*__)|([a-z_][a-z0-9_]*))$

@@ -29,7 +29,8 @@ class Warren:
         Initialize Warren with RabbitMQ connection parameters.
 
         Args:
-            config (BunnyStreamConfig): Configuration object containing BunnyStream parameters.
+            config (BunnyStreamConfig): Configuration object containing
+                BunnyStream parameters.
         """
         self._rabbit_connection = None
         self._config = config
@@ -62,7 +63,8 @@ class Warren:
             value (BunnyStreamConfig): The new BunnyStream configuration to set.
 
         Raises:
-            BunnyStreamConfigurationError: If the provided value is not a valid BunnyStreamConfig instance.
+            BunnyStreamConfigurationError: If the provided value is not a valid
+                BunnyStreamConfig instance.
         """
         if not isinstance(value, BunnyStreamConfig):
             raise BunnyStreamConfigurationError(
@@ -246,9 +248,7 @@ class Warren:
             subscription.topic,
         )
 
-    def on_connection_error(
-        self, _connection: pika.SelectConnection, error: Exception
-    ) -> None:
+    def on_connection_error(self, _connection: pika.SelectConnection, error: Exception) -> None:
         """
         Callback when there is an error opening the RabbitMQ connection.
 
@@ -294,20 +294,14 @@ class Warren:
         if self._channel is None:
             raise WarrenNotConnected("Cannot publish, channel not available.")
 
-        self.logger.debug(
-            "Publishing message to exchange '%s' with topic '%s'", exchange, topic
-        )
-        self._channel.exchange_declare(
-            exchange=exchange, exchange_type=exchange_type, durable=True
-        )
+        self.logger.debug("Publishing message to exchange '%s' with topic '%s'", exchange, topic)
+        self._channel.exchange_declare(exchange=exchange, exchange_type=exchange_type, durable=True)
 
         self._channel.basic_publish(
             exchange=exchange,
             routing_key=topic,
             body=message,
-            properties=pika.BasicProperties(
-                content_type="application/json", delivery_mode=2
-            ),
+            properties=pika.BasicProperties(content_type="application/json", delivery_mode=2),
         )
 
     def start_consuming(self, message_callback: Callable) -> None:

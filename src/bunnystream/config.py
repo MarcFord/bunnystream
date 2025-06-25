@@ -1,3 +1,19 @@
+"""
+Configuration module for BunnyStream.
+
+This module provides the BunnyStreamConfig class for managing RabbitMQ connection
+parameters, subscriptions, and other configuration options. It supports
+environment variable parsing, advanced connection settings, and subscription
+management for both producer and consumer modes.
+
+Classes:
+    BunnyStreamConfig: Main configuration class for RabbitMQ connections.
+
+Constants:
+    Various default values for connection parameters, timeouts, and limits.
+"""
+
+import json
 import os
 from typing import Optional, Union
 from urllib.parse import unquote, urlparse
@@ -56,6 +72,24 @@ VALID_MODES = [BUNNYSTREAM_MODE_PRODUCER, BUNNYSTREAM_MODE_CONSUMER]
 
 
 class BunnyStreamConfig:
+    """
+    Configuration class for BunnyStream RabbitMQ connections.
+
+    This class manages all aspects of RabbitMQ connection configuration including
+    connection parameters, subscriptions, SSL settings, and advanced options.
+    It supports both producer and consumer modes and can parse configuration
+    from environment variables.
+
+    Args:
+        mode: The operation mode ("producer" or "consumer")
+        exchange_name: Name of the RabbitMQ exchange
+        rabbit_host: RabbitMQ server hostname
+        rabbit_port: RabbitMQ server port
+        rabbit_vhost: RabbitMQ virtual host
+        rabbit_user: Username for authentication
+        rabbit_pass: Password for authentication
+    """
+
     def __init__(
         self,
         mode: str,
@@ -95,7 +129,7 @@ class BunnyStreamConfig:
         # Check for RABBITMQ_URL environment variable first
         rabbitmq_url = os.getenv("RABBITMQ_URL")
         if rabbitmq_url:
-            self.logger.debug("Found RABBITMQ_URL environment variable, " "parsing URL")
+            self.logger.debug("Found RABBITMQ_URL environment variable, parsing URL")
             parsed_params = self._parse_rabbitmq_url(rabbitmq_url)
 
             # Use parsed values if not explicitly provided in constructor
@@ -161,8 +195,7 @@ class BunnyStreamConfig:
             # Validate scheme
             if parsed.scheme not in ["amqp", "amqps"]:
                 raise ValueError(
-                    f"Invalid URL scheme '{parsed.scheme}'. "
-                    "Expected 'amqp' or 'amqps'."
+                    f"Invalid URL scheme '{parsed.scheme}'. " "Expected 'amqp' or 'amqps'."
                 )
 
             # Extract components
@@ -189,8 +222,7 @@ class BunnyStreamConfig:
                 result["vhost"] = "/"
 
             self.logger.debug(
-                "Parsed RABBITMQ_URL components: host=%s, "
-                "port=%s, vhost=%s, user=%s",
+                "Parsed RABBITMQ_URL components: host=%s, port=%s, vhost=%s, user=%s",
                 result.get("host"),
                 result.get("port"),
                 result.get("vhost"),
@@ -319,7 +351,7 @@ class BunnyStreamConfig:
                 f"{self._rabbit_host}:{self._rabbit_port}"
                 f"/{self._rabbit_vhost}"
             )
-            masked_url = self._url.replace(self._rabbit_pass, "***")
+            masked_url = self._url.replace(self._rabbit_pass or "", "***")
             self.logger.debug("Generated AMQP URL: %s", masked_url)
         return self._url
 
@@ -339,8 +371,7 @@ class BunnyStreamConfig:
                 self._rabbit_port = int(self._rabbit_port)
             except ValueError as exc:
                 raise RabbitPortError(
-                    "Rabbit port must be a string that can be converted "
-                    "to an integer."
+                    "Rabbit port must be a string that can be converted to an integer."
                 ) from exc
         if not isinstance(self._rabbit_port, int):
             raise RabbitPortError("Rabbit port must be an integer.")
@@ -357,8 +388,7 @@ class BunnyStreamConfig:
                 value = int(value)
             except ValueError as exc:
                 raise RabbitPortError(
-                    "Rabbit port must be a string that can be converted "
-                    "to an integer."
+                    "Rabbit port must be a string that can be converted to an integer."
                 ) from exc
         if not isinstance(value, int):
             raise RabbitPortError(
@@ -444,8 +474,8 @@ class BunnyStreamConfig:
         Returns the current RabbitMQ username.
 
         If the username is not set, defaults to 'guest' and logs this event.
-        Validates that the username is a non-empty string. Raises a RabbitCredentialsError
-        if the username is not a string or is empty.
+        Validates that the username is a non-empty string. Raises a
+        RabbitCredentialsError if the username is not a string or is empty.
 
         Returns:
             str: The current RabbitMQ username.
@@ -489,7 +519,8 @@ class BunnyStreamConfig:
     @property
     def rabbit_pass(self) -> str:
         """
-        Retrieves the RabbitMQ password, setting it to the default 'guest' if not already set.
+        Retrieves the RabbitMQ password, setting it to the default 'guest'
+        if not already set.
 
         Returns:
             str: The RabbitMQ password.
@@ -502,9 +533,7 @@ class BunnyStreamConfig:
             - Debug: The current (masked) password value.
         """
         if self._rabbit_pass is None:
-            self.logger.info(
-                "Rabbit password is not set, using default " "password 'guest'."
-            )
+            self.logger.info("Rabbit password is not set, using default password 'guest'.")
             self._rabbit_pass = DEFAULT_PASS
         if not isinstance(self._rabbit_pass, str):
             raise RabbitCredentialsError("Rabbit password must be a string.")
@@ -623,21 +652,9 @@ class BunnyStreamConfig:
         if not isinstance(value, int):
             raise ValueError("Frame max must be an integer.")
         if value <= FRAME_MIN_SIZE:
-            raise ValueError(
-                "Min AMQP 0.9.1 Frame Size is %i, but got %r"
-                % (
-                    FRAME_MIN_SIZE,
-                    value,
-                )
-            )
-        elif value > FRAME_MAX_SIZE:
-            raise ValueError(
-                "Max AMQP 0.9.1 Frame Size is %i, but got %r"
-                % (
-                    FRAME_MAX_SIZE,
-                    value,
-                )
-            )
+            raise ValueError(f"Min AMQP 0.9.1 Frame Size is {FRAME_MIN_SIZE}, but got {value!r}")
+        if value > FRAME_MAX_SIZE:
+            raise ValueError(f"Max AMQP 0.9.1 Frame Size is {FRAME_MAX_SIZE}, but got {value!r}")
         self.logger.debug("Setting frame max to: %s", value)
         self._frame_max = value
 
@@ -668,9 +685,7 @@ class BunnyStreamConfig:
                     DEFAULT_HEARTBEAT_TIMEOUT,
                 )
                 return DEFAULT_HEARTBEAT_TIMEOUT
-        self.logger.debug(
-            "Using default heartbeat timeout: %s", DEFAULT_HEARTBEAT_TIMEOUT
-        )
+        self.logger.debug("Using default heartbeat timeout: %s", DEFAULT_HEARTBEAT_TIMEOUT)
         return DEFAULT_HEARTBEAT_TIMEOUT
 
     @heartbeat.setter
@@ -700,7 +715,8 @@ class BunnyStreamConfig:
         It defaults to None, meaning no timeout is set.
 
         Returns:
-            Optional[float]: The blocked connection timeout in seconds, or None if not set.
+            Optional[float]: The blocked connection timeout in seconds,
+                or None if not set.
         """
         if (
             self._blocked_connection_timeout != NOT_SET_FLOAT
@@ -747,15 +763,11 @@ class BunnyStreamConfig:
             ValueError: If the provided value is not a non-negative float.
         """
         if value is None:
-            self.logger.debug(
-                "Setting blocked connection timeout to None (no timeout)."
-            )
+            self.logger.debug("Setting blocked connection timeout to None (no timeout).")
             self._blocked_connection_timeout = None
             return
         if not isinstance(value, (int, float)):
-            raise ValueError(
-                "Blocked connection timeout must be a float or an integer."
-            )
+            raise ValueError("Blocked connection timeout must be a float or an integer.")
         if value < 0:
             raise ValueError("Blocked connection timeout must be a non-negative float.")
         self.logger.debug("Setting blocked connection timeout to: %s", value)
@@ -773,9 +785,7 @@ class BunnyStreamConfig:
             int: The number of connection attempts.
         """
         if self._connection_attempts is not None:
-            self.logger.debug(
-                "Using internal connection attempts: %s", self._connection_attempts
-            )
+            self.logger.debug("Using internal connection attempts: %s", self._connection_attempts)
             return self._connection_attempts
         # Check environment variable for connection attempts
         connection_attempts = os.getenv("RABBITMQ_CONNECTION_ATTEMPTS")
@@ -790,9 +800,7 @@ class BunnyStreamConfig:
                     DEFAULT_CONNECTION_ATTEMPTS,
                 )
                 return DEFAULT_CONNECTION_ATTEMPTS
-        self.logger.debug(
-            "Using default connection attempts: %s", DEFAULT_CONNECTION_ATTEMPTS
-        )
+        self.logger.debug("Using default connection attempts: %s", DEFAULT_CONNECTION_ATTEMPTS)
         return DEFAULT_CONNECTION_ATTEMPTS
 
     @connection_attempts.setter
@@ -977,15 +985,11 @@ class BunnyStreamConfig:
         tcp_options = os.getenv("RABBITMQ_TCP_OPTIONS")
         if tcp_options:
             try:
-                import json
-
                 tcp_options = json.loads(tcp_options)
                 self.tcp_options = tcp_options  # Use setter to validate
                 return tcp_options
             except json.JSONDecodeError as e:
-                self.logger.error(
-                    "Invalid RABBITMQ_TCP_OPTIONS JSON format: %s", str(e)
-                )
+                self.logger.error("Invalid RABBITMQ_TCP_OPTIONS JSON format: %s", str(e))
                 return None
             except InvalidTCPOptionsError as e:
                 self.logger.error("Invalid TCP options: %s", str(e))
@@ -1030,11 +1034,11 @@ class BunnyStreamConfig:
         # Check environment variable for SSL setting
         ssl = os.getenv("RABBITMQ_SSL", "false").lower()
         if ssl in ["true", "1", "yes"]:
-            self.ssl = True
+            self._ssl = True
         elif ssl in ["false", "0", "no"]:
-            self.ssl = False
+            self._ssl = False
         else:
-            self.ssl = DEFAULT_SSL
+            self._ssl = DEFAULT_SSL
         self.logger.debug("SSL enabled: %s", self._ssl)
         return self._ssl
 
@@ -1069,7 +1073,7 @@ class BunnyStreamConfig:
             self.logger.debug("Using internal SSL port: %s", self._ssl_port)
             return self._ssl_port
         # Check environment variable for SSL port
-        ssl_port = os.getenv("RABBITMQ_SSL_PORT", DEFAULT_SSL_PORT)
+        ssl_port = os.getenv("RABBITMQ_SSL_PORT", str(DEFAULT_SSL_PORT))
         try:
             ssl_port = int(ssl_port)
             self.ssl_port = ssl_port  # Use setter to validate
@@ -1110,7 +1114,11 @@ class BunnyStreamConfig:
         Returns:
             Optional[pika.connection.SSLOptions]: The SSL options, or None if not set.
         """
-        if self._ssl_options != NOT_SET and self._ssl_options is not None:
+        if (
+            self._ssl_options != NOT_SET
+            and self._ssl_options is not None
+            and isinstance(self._ssl_options, pika.connection.SSLOptions)
+        ):
             self.logger.debug("Using custom SSL options.")
             return self._ssl_options
         self.logger.debug("Using default SSL options: None")
@@ -1125,7 +1133,8 @@ class BunnyStreamConfig:
             value (pika.connection.SSLOptions): The SSL options to set.
 
         Raises:
-            TypeError: If the provided value is not an instance of pika.connection.SSLOptions.
+            TypeError: If the provided value is not an instance of
+                pika.connection.SSLOptions.
         """
         if not isinstance(value, pika.connection.SSLOptions):
             raise SSLOptionsError()
@@ -1152,9 +1161,7 @@ class BunnyStreamConfig:
             self.locale = locale  # Use setter to validate
             self.logger.debug("Using RABBITMQ_LOCALE from environment: %s", locale)
         except ValueError:
-            self.logger.error(
-                "Invalid RABBITMQ_LOCALE value, using default: %s", DEFAULT_LOCALE
-            )
+            self.logger.error("Invalid RABBITMQ_LOCALE value, using default: %s", DEFAULT_LOCALE)
             locale = DEFAULT_LOCALE
         self.logger.debug("Using RabbitMQ locale: %s", locale)
         return locale
@@ -1199,10 +1206,12 @@ class BunnyStreamConfig:
         Returns a mapping of exchange names to their topics.
 
         This property provides a dictionary where each key is an exchange name
-        and the value is another dictionary containing the topics associated with that exchange.
+        and the value is another dictionary containing the topics associated
+        with that exchange.
 
         Returns:
-            dict[str, dict[str, object]]: A mapping of exchange names to their topics and exchange type.
+            dict[str, dict[str, object]]: A mapping of exchange names to their
+                topics and exchange type.
         """
         if self._subscriptions is None:
             raise SubscriptionsNotSetError("Subscriptions have not been set.")
@@ -1255,9 +1264,7 @@ class BunnyStreamConfig:
             raise SubscriptionsNotSetError("Subscriptions have not been set.")
         for subscription in self._subscriptions:
             if subscription.exchange_name == exchange_name:
-                self.logger.debug(
-                    "Removing subscription for exchange: %s", exchange_name
-                )
+                self.logger.debug("Removing subscription for exchange: %s", exchange_name)
                 self._subscriptions.remove(subscription)
                 self._subscription_mappings.pop(exchange_name, None)
                 return
@@ -1287,7 +1294,6 @@ class BunnyStreamConfig:
         if invalid_keys:
             self.logger.error("Invalid TCP options provided: %s", invalid_keys)
             raise InvalidTCPOptionsError(
-                f"Invalid TCP options: {invalid_keys}. "
-                f"Valid options are: {valid_keys}"
+                f"Invalid TCP options: {invalid_keys}. " f"Valid options are: {valid_keys}"
             )
         self.logger.debug("TCP options validated successfully: %s", options)

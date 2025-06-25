@@ -76,9 +76,7 @@ class TestBaseEvent:
         """Test json property returns serialized data."""
         event = EventForTesting(warren=self.warren, test_key="test_value")
 
-        with patch.object(
-            event, "serialize", return_value='{"test": "data"}'
-        ) as mock_serialize:
+        with patch.object(event, "serialize", return_value='{"test": "data"}') as mock_serialize:
             result = event.json
 
             mock_serialize.assert_called_once()
@@ -166,9 +164,7 @@ class TestBaseEvent:
             "bunnystream": {"topic": "dynamic.topic", "type": ExchangeType.topic}
         }
 
-        event = EventForTestingWithBadExchangeType(
-            warren=self.warren, test_key="test_value"
-        )
+        event = EventForTestingWithBadExchangeType(warren=self.warren, test_key="test_value")
 
         with patch.object(event, "serialize", return_value='{"test": "data"}'):
             event.fire()

@@ -72,7 +72,10 @@ class BunnyStreamModeError(BunnyStreamError):
         valid_modes: Union[list, None] = None,
     ):
         if value is not None and valid_modes is not None:
-            message = f"BunnyStream mode '{value}' is invalid. Valid modes are: {', '.join(valid_modes)}."
+            message = (
+                f"BunnyStream mode '{value}' is invalid. "
+                f"Valid modes are: {', '.join(valid_modes)}."
+            )
         if message is None:
             message = "BunnyStream mode must be either 'producer' or 'consumer'."
         super().__init__(message)
@@ -111,7 +114,7 @@ class SubscriptionsNotSetError(BunnyStreamError):
 
     def __init__(
         self,
-        message: str = "Subscriptions must be set before starting the BunnyStream consumer.",
+        message: str = ("Subscriptions must be set before starting the BunnyStream consumer."),
     ):
         super().__init__(message)
 

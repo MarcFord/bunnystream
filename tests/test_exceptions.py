@@ -1,16 +1,17 @@
 """
 Test suite for the exceptions module.
 """
+
 import pytest
 
 from bunnystream.exceptions import (
-    RabbitPortError,
-    RabbitHostError,
-    RabbitVHostError,
-    RabbitCredentialsError,
-    ExcangeNameError,
-    WarrenNotConfigured,
     BunnyStreamError,
+    ExcangeNameError,
+    RabbitCredentialsError,
+    RabbitHostError,
+    RabbitPortError,
+    RabbitVHostError,
+    WarrenNotConfigured,
 )
 
 
@@ -21,7 +22,10 @@ class TestExceptions:
         """Test RabbitPortError with default message."""
         with pytest.raises(RabbitPortError) as exc_info:
             raise RabbitPortError()
-        assert "Rabbit port must be a positive integer or a string that can be converted to an integer." in str(exc_info.value)
+        assert (
+            "Rabbit port must be a positive integer or a string that can be converted to an integer."
+            in str(exc_info.value)
+        )
 
     def test_rabbit_port_error_custom_message(self):
         """Test RabbitPortError with custom message."""
@@ -112,9 +116,9 @@ class TestExceptions:
             RabbitVHostError(),
             RabbitCredentialsError(),
             ExcangeNameError(),
-            WarrenNotConfigured()
+            WarrenNotConfigured(),
         ]
-        
+
         # Check that no two exceptions are of the same type
         for i, exc1 in enumerate(exceptions):
             for j, exc2 in enumerate(exceptions):

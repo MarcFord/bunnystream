@@ -195,9 +195,7 @@ class TestWarren:
         with patch.object(self.warren, "_declare_consumer_resources") as mock_declare:
             self.warren._setup_consumer()
 
-        mock_channel.basic_qos.assert_called_once_with(
-            prefetch_count=self.config.prefetch_count
-        )
+        mock_channel.basic_qos.assert_called_once_with(prefetch_count=self.config.prefetch_count)
         mock_declare.assert_called_once_with(subscription)
 
     def test_setup_consumer_no_channel(self):
@@ -224,9 +222,7 @@ class TestWarren:
 
         # Check queue declaration
         expected_queue_name = "test_exchange.test.topic"
-        mock_channel.queue_declare.assert_called_once_with(
-            queue=expected_queue_name, durable=True
-        )
+        mock_channel.queue_declare.assert_called_once_with(queue=expected_queue_name, durable=True)
 
         # Check queue binding
         mock_channel.queue_bind.assert_called_once_with(
@@ -285,9 +281,7 @@ class TestWarren:
             exchange=exchange,
             routing_key=topic,
             body=message,
-            properties=pika.BasicProperties(
-                content_type="application/json", delivery_mode=2
-            ),
+            properties=pika.BasicProperties(content_type="application/json", delivery_mode=2),
         )
 
     def test_publish_custom_exchange_type(self):
@@ -368,9 +362,7 @@ class TestWarren:
 
         self.warren._on_message(mock_channel, mock_method, mock_properties, body)
 
-        mock_callback.assert_called_once_with(
-            mock_channel, mock_method, mock_properties, body
-        )
+        mock_callback.assert_called_once_with(mock_channel, mock_method, mock_properties, body)
         mock_channel.basic_ack.assert_called_once_with(delivery_tag="delivery_tag_123")
 
     def test_on_message_callback_exception(self):
@@ -492,9 +484,7 @@ class TestWarren:
         self.warren._on_message(mock_channel, mock_method, mock_properties, mock_body)
 
         # Should call basic_nack with requeue=True
-        mock_channel.basic_nack.assert_called_once_with(
-            delivery_tag="test_tag", requeue=True
-        )
+        mock_channel.basic_nack.assert_called_once_with(delivery_tag="test_tag", requeue=True)
 
         # Reset mock
         mock_channel.reset_mock()
@@ -506,9 +496,7 @@ class TestWarren:
         self.warren._consumer_callback = callback_with_type_error
         self.warren._on_message(mock_channel, mock_method, mock_properties, mock_body)
 
-        mock_channel.basic_nack.assert_called_once_with(
-            delivery_tag="test_tag", requeue=True
-        )
+        mock_channel.basic_nack.assert_called_once_with(delivery_tag="test_tag", requeue=True)
 
         # Reset mock
         mock_channel.reset_mock()
@@ -520,9 +508,7 @@ class TestWarren:
         self.warren._consumer_callback = callback_with_key_error
         self.warren._on_message(mock_channel, mock_method, mock_properties, mock_body)
 
-        mock_channel.basic_nack.assert_called_once_with(
-            delivery_tag="test_tag", requeue=True
-        )
+        mock_channel.basic_nack.assert_called_once_with(delivery_tag="test_tag", requeue=True)
 
     def test_on_message_unexpected_exception(self):
         """Test _on_message method with unexpected exception type."""
@@ -544,6 +530,4 @@ class TestWarren:
         self.warren._on_message(mock_channel, mock_method, mock_properties, mock_body)
 
         # Should call basic_nack with requeue=True
-        mock_channel.basic_nack.assert_called_once_with(
-            delivery_tag="test_tag", requeue=True
-        )
+        mock_channel.basic_nack.assert_called_once_with(delivery_tag="test_tag", requeue=True)

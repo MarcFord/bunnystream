@@ -1,6 +1,7 @@
 """
 Logging configuration for the bunnystream package.
 """
+
 import logging
 import sys
 from typing import Optional
@@ -29,7 +30,7 @@ def get_bunny_logger(name: Optional[str] = None) -> logging.Logger:
 def configure_bunny_logger(
     level: int = logging.INFO,
     format_string: Optional[str] = None,
-    handler: Optional[logging.Handler] = None
+    handler: Optional[logging.Handler] = None,
 ) -> logging.Logger:
     """
     Configure the bunnystream logger with custom settings.

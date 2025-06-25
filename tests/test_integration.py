@@ -196,10 +196,7 @@ class TestPackageIntegration:
         assert warren.config.rabbit_vhost == "/app"
         assert warren.config.rabbit_user == "app_user"
         assert warren.config.rabbit_pass == "app_password"
-        assert (
-            connection_url
-            == "amqp://app_user:app_password@messaging.company.com:5672//app"
-        )
+        assert connection_url == "amqp://app_user:app_password@messaging.company.com:5672//app"
 
         # Step 6: Test that configuration changes work
         warren.config.rabbit_port = 5671

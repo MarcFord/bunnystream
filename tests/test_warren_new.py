@@ -238,9 +238,7 @@ class TestWarrenCallbacks:
         warren.on_connection_open(mock_connection)
 
         # Verify channel is requested
-        mock_connection.channel.assert_called_once_with(
-            on_open_callback=warren.on_channel_open
-        )
+        mock_connection.channel.assert_called_once_with(on_open_callback=warren.on_channel_open)
 
     def test_on_channel_open_callback(self):
         """Test on_channel_open callback."""

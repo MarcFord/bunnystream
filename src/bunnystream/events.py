@@ -2,17 +2,19 @@
 bunnystream.events
 ------------------
 
-This module defines the `BaseEvent` class, which provides a framework for creating and publishing
-events within the bunnystream system. Events are serializable objects that can be published to a
-message broker using a configured `Warren` instance. The module handles event metadata enrichment,
-serialization (including UUID handling), and publishing logic, with support for dynamic topic and
-exchange configuration.
+This module defines the `BaseEvent` class, which provides a framework for creating 
+and publishing events within the bunnystream system. Events are serializable objects 
+that can be published to a message broker using a configured `Warren` instance. The 
+module handles event metadata enrichment, serialization (including UUID handling), and 
+publishing logic, with support for dynamic topic and exchange configuration.
 
 Classes:
-    BaseEvent: Base class for defining publishable events with metadata and serialization support.
+    BaseEvent: Base class for defining publishable events with metadata and 
+        serialization support.
 
 Exceptions:
-    WarrenNotConfigured: Raised when the event's warren or topic/exchange configuration is missing.
+    WarrenNotConfigured: Raised when the event's warren or topic/exchange 
+        configuration is missing.
 
 Dependencies:
     - platform
@@ -69,22 +71,24 @@ class BaseEvent:
         """
         Returns a JSON-serializable representation of the object.
 
-        This method calls the `serialize()` method to obtain a representation of the object
-        that can be converted to JSON format.
+        This method calls the `serialize()` method to obtain a representation of the
+        object that can be converted to JSON format.
 
         Returns:
-            dict: A dictionary representation of the object suitable for JSON serialization.
+            dict: A dictionary representation of the object suitable for JSON
+                serialization.
         """
         return self.serialize()
 
     def serialize(self) -> str:
         """
         Serializes the event object to a JSON-formatted string.
-        This method updates the event's metadata with information such as hostname, timestamp,
-        host IP address, operating system info, and the current version of bunnystream. If a
-        RuntimeError occurs during metadata collection, it is silently ignored.
-        UUID objects within the event data are converted to their hexadecimal string representation
-        for JSON serialization.
+        This method updates the event's metadata with information such as hostname,
+        timestamp, host IP address, operating system info, and the current version
+        of bunnystream. If a RuntimeError occurs during metadata collection, it is
+        silently ignored.
+        UUID objects within the event data are converted to their hexadecimal string
+        representation for JSON serialization.
         Returns:
             str: A JSON-formatted string representing the event data.
         """
@@ -92,9 +96,7 @@ class BaseEvent:
         try:
             self["_meta_"] = {
                 "hostname": str(platform.node()),
-                "timestamp": str(
-                    datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-                ),
+                "timestamp": str(datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")),
                 "host_ip_address": str(self._get_host_ip_address()),
                 "host_os_in": self._get_os_info(),
                 "bunnystream_version": bunnystream_version,
@@ -105,6 +107,7 @@ class BaseEvent:
         def uuid_convert(o):
             if isinstance(o, UUID):
                 return o.hex
+            return o
 
         return json.dumps(self.data, default=uuid_convert)
 
@@ -112,8 +115,8 @@ class BaseEvent:
         """
         Publishes the event to the configured message broker.
         Raises:
-            WarrenNotConfigured: If the event's warren is not set, or if no exchange/topic
-            configuration is found.
+            WarrenNotConfigured: If the event's warren is not set, or if no
+                exchange/topic configuration is found.
         Returns:
             The result of the publish operation from the warren instance.
         """
@@ -136,10 +139,9 @@ class BaseEvent:
         if not isinstance(topic, str):
             raise ValueError("TOPIC must be a string")
 
-        # At this point, EXCHANGE_TYPE is guaranteed to be valid due to the fallback logic above
-        assert isinstance(
-            self.EXCHANGE_TYPE, ExchangeType
-        ), "EXCHANGE_TYPE should be valid"
+        # At this point, EXCHANGE_TYPE is guaranteed to be valid due to the
+        # fallback logic above
+        assert isinstance(self.EXCHANGE_TYPE, ExchangeType), "EXCHANGE_TYPE should be valid"
 
         return self._warren.publish(
             topic=topic,
@@ -152,9 +154,7 @@ class BaseEvent:
         return self.data[item]
 
     def __setitem__(self, key, value):
-        if value is not None and not isinstance(
-            value, (list, dict, tuple, str, float, int, bool)
-        ):
+        if value is not None and not isinstance(value, (list, dict, tuple, str, float, int, bool)):
             value = str(value)
 
         self.data[key] = value
