@@ -84,9 +84,7 @@ class UserRegisteredEvent(BaseEvent):
 
     def __init__(self, warren: Warren, user_id: str, email: str, **kwargs):
         super().__init__(warren, **kwargs)
-        self.data.update(
-            {"event_type": "user.registered", "user_id": user_id, "email": email}
-        )
+        self.data.update({"event_type": "user.registered", "user_id": user_id, "email": email})
 
 
 class UserUpdatedEvent(BaseEvent):
@@ -97,9 +95,7 @@ class UserUpdatedEvent(BaseEvent):
 
     def __init__(self, warren: Warren, user_id: str, email: str, **kwargs):
         super().__init__(warren, **kwargs)
-        self.data.update(
-            {"event_type": "user.updated", "user_id": user_id, "email": email}
-        )
+        self.data.update({"event_type": "user.updated", "user_id": user_id, "email": email})
 
 
 class ProductCreatedEvent(BaseEvent):
@@ -108,9 +104,7 @@ class ProductCreatedEvent(BaseEvent):
     TOPIC = "product.created"
     EXCHANGE = "ecommerce_events"
 
-    def __init__(
-        self, warren: Warren, product_id: str, name: str, price: float, **kwargs
-    ):
+    def __init__(self, warren: Warren, product_id: str, name: str, price: float, **kwargs):
         super().__init__(warren, **kwargs)
         self.data.update(
             {
@@ -128,9 +122,7 @@ class ProductUpdatedEvent(BaseEvent):
     TOPIC = "product.updated"
     EXCHANGE = "ecommerce_events"
 
-    def __init__(
-        self, warren: Warren, product_id: str, name: str, price: float, **kwargs
-    ):
+    def __init__(self, warren: Warren, product_id: str, name: str, price: float, **kwargs):
         super().__init__(warren, **kwargs)
         self.data.update(
             {
@@ -434,13 +426,15 @@ def main():
     print("🐰 BunnyStream Multi-Topic Warren Demo")
     print("=" * 50)
 
-    choice = input("""
+    choice = input(
+        """
 Choose an option:
 1. Start Consumer (listens to multiple topics)
 2. Run Producer (publishes to multiple topics)
 3. Run Both (producer first, then consumer)
 
-Enter your choice (1, 2, or 3): """).strip()
+Enter your choice (1, 2, or 3): """
+    ).strip()
 
     if choice == "1":
         setup_consumer()

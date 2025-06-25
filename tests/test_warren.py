@@ -73,7 +73,8 @@ class TestWarren:
         """Test connection_parameters property."""
         mock_conn_params.return_value = Mock()
 
-        params = self.warren.connection_parameters
+        # Call the property to trigger the connection parameters creation
+        self.warren.connection_parameters
 
         mock_conn_params.assert_called_once_with(
             host=self.config.rabbit_host,

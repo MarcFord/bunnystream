@@ -612,8 +612,8 @@ class TestBunnyStreamConfigAdvancedProperties:
         assert config.ssl is True
 
     @patch.dict(os.environ, {"RABBITMQ_SSL": "YES"})
-    def test_ssl_getter_uses_environment_value_yes(self):
-        """Test ssl getter uses environment value 'yes'."""
+    def test_ssl_getter_uses_environment_value_uppercase_yes(self):
+        """Test ssl getter uses environment value 'YES'."""
         config = BunnyStreamConfig(mode="producer")
 
         # Environment variable should override the default
@@ -676,7 +676,10 @@ class TestBunnyStreamConfigAdvancedProperties:
     @patch.dict(
         os.environ,
         {
-            "RABBITMQ_TCP_OPTIONS": '{"TCP_KEEPIDLE": 60, "TCP_KEEPINTVL": 10, "TCP_KEEPCNT": 5, "TCP_USER_TIMEOUT": 30000}'
+            "RABBITMQ_TCP_OPTIONS": (
+                '{"TCP_KEEPIDLE": 60, "TCP_KEEPINTVL": 10, '
+                '"TCP_KEEPCNT": 5, "TCP_USER_TIMEOUT": 30000}'
+            )
         },
     )
     def test_tcp_options_setter_with_valid_environment(self):

@@ -2,18 +2,18 @@
 bunnystream.events
 ------------------
 
-This module defines the `BaseEvent` class, which provides a framework for creating 
-and publishing events within the bunnystream system. Events are serializable objects 
-that can be published to a message broker using a configured `Warren` instance. The 
-module handles event metadata enrichment, serialization (including UUID handling), and 
+This module defines the `BaseEvent` class, which provides a framework for creating
+and publishing events within the bunnystream system. Events are serializable objects
+that can be published to a message broker using a configured `Warren` instance. The
+module handles event metadata enrichment, serialization (including UUID handling), and
 publishing logic, with support for dynamic topic and exchange configuration.
 
 Classes:
-    BaseEvent: Base class for defining publishable events with metadata and 
+    BaseEvent: Base class for defining publishable events with metadata and
         serialization support.
 
 Exceptions:
-    WarrenNotConfigured: Raised when the event's warren or topic/exchange 
+    WarrenNotConfigured: Raised when the event's warren or topic/exchange
         configuration is missing.
 
 Dependencies:

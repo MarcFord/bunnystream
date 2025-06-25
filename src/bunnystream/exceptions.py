@@ -88,7 +88,8 @@ class SSLOptionsError(BunnyStreamError):
         message = """
         BunnyStream uses the pika library for RabbitMQ connections.
         The SSLOptions class is provided by pika please refer to the pika documentation for more information:
-        https://pika.readthedocs.io/en/stable/modules/parameters.html#pika.connection.ConnectionParameters.ssl_options"""
+        https://pika.readthedocs.io/en/stable/modules/parameters.html#pika.connection.ConnectionParameters.ssl_options
+        """  # noqa: E501
         super().__init__(message)
 
 

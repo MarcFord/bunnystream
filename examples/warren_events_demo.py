@@ -65,15 +65,11 @@ def demo_producer():
 
     # Add custom subscriptions for different exchanges
     config.add_subscription(
-        Subscription(
-            exchange_name="orders", exchange_type=ExchangeType.topic, topic="order.*"
-        )
+        Subscription(exchange_name="orders", exchange_type=ExchangeType.topic, topic="order.*")
     )
 
     config.add_subscription(
-        Subscription(
-            exchange_name="notifications", exchange_type=ExchangeType.fanout, topic=""
-        )
+        Subscription(exchange_name="notifications", exchange_type=ExchangeType.fanout, topic="")
     )
 
     # Create Warren instance
@@ -143,9 +139,7 @@ def demo_consumer():
     print(f"Prefetch count: {config.prefetch_count}")
     print("Subscriptions:")
     for sub in config.subscriptions:
-        print(
-            f"  - Exchange: {sub.exchange_name}, Type: {sub.exchange_type}, Topic: {sub.topic}"
-        )
+        print(f"  - Exchange: {sub.exchange_name}, Type: {sub.exchange_type}, Topic: {sub.topic}")
 
     # In a real scenario, you would do:
     # warren.connect()
