@@ -18,14 +18,14 @@ from bunnystream.config import (
 from bunnystream.exceptions import (
     BunnyStreamModeError,
     ExcangeNameError,
+    InvalidTCPOptionsError,
     PrefetchCountError,
     RabbitCredentialsError,
     RabbitHostError,
     RabbitPortError,
     RabbitVHostError,
-    InvalidTCPOptionsError,
-    SubscriptionsNotSetError,
     SSLOptionsError,
+    SubscriptionsNotSetError,
 )
 from bunnystream.logger import get_bunny_logger
 from bunnystream.subscription import Subscription
@@ -130,69 +130,60 @@ class TestBunnyStreamConfigRabbitProperties:
         config.rabbit_host = "newhost.com"
         assert config.rabbit_host == "newhost.com"
 
-    def test_rabbit_host_setter_with_invalid_values(self):
+    @pytest.mark.parametrize(
+        "invalid_host", [None, "", "   ", 10, "amqp://example.com"]
+    )
+    def test_rabbit_host_setter_with_invalid_values(self, invalid_host):
         """Test rabbit_host setter with invalid values."""
         config = BunnyStreamConfig(mode="producer")
 
         with pytest.raises(RabbitHostError):
-            config.rabbit_host = ""
+            config.rabbit_host = invalid_host
 
-        with pytest.raises(RabbitHostError):
-            config.rabbit_host = "   "
-
-        with pytest.raises(RabbitHostError):
-            config.rabbit_host = None
-
-    def test_rabbit_port_property(self):
+    @pytest.mark.parametrize("port", [5672, "5672"])
+    def test_rabbit_port_property(self, port):
         """Test rabbit_port property getter and setter."""
         config = BunnyStreamConfig(mode="producer")
 
-        # Test getter
+        # Test getter default port value
         assert config.rabbit_port == 5672
 
         # Test setter
-        config.rabbit_port = 5673
-        assert config.rabbit_port == 5673
+        config.rabbit_port = port
+        assert config.rabbit_port == port if isinstance(port, int) else int(port)
 
-    def test_rabbit_port_setter_with_string(self):
-        """Test rabbit_port setter with string value."""
-        config = BunnyStreamConfig(mode="producer")
-        config.rabbit_port = "5674"
-        assert config.rabbit_port == 5674
+        # Test when _rabbit_port is not an integer
+        config._rabbit_port = "not_an_integer"
+        with pytest.raises(RabbitPortError):
+            _ = config.rabbit_port
 
-    def test_rabbit_port_setter_with_invalid_values(self):
+    @pytest.mark.parametrize("port", [0, -1, "invalid", None, "4.5", 4.5])
+    def test_rabbit_port_setter_with_invalid_values(self, port):
         """Test rabbit_port setter with invalid values."""
         config = BunnyStreamConfig(mode="producer")
 
         with pytest.raises(RabbitPortError):
-            config.rabbit_port = 0
+            config.rabbit_port = port
 
-        with pytest.raises(RabbitPortError):
-            config.rabbit_port = -1
-
-        with pytest.raises(RabbitPortError):
-            config.rabbit_port = "invalid"
-
-    def test_rabbit_vhost_property(self):
+    @pytest.mark.parametrize("vhost", ["/example", "/test", "/1"])
+    def test_rabbit_vhost_property(self, vhost):
         """Test rabbit_vhost property getter and setter."""
         config = BunnyStreamConfig(mode="producer")
 
-        # Test getter
+        # Test getter for default vhost
         assert config.rabbit_vhost == "/"
 
         # Test setter
-        config.rabbit_vhost = "/test"
-        assert config.rabbit_vhost == "/test"
+        config.rabbit_vhost = vhost
+        assert config.rabbit_vhost == vhost
 
-    def test_rabbit_vhost_setter_with_invalid_values(self):
+    @pytest.mark.parametrize("vhost", ["", "   ", 1])
+    def test_rabbit_vhost_setter_with_invalid_values(self, vhost):
         """Test rabbit_vhost setter with invalid values."""
         config = BunnyStreamConfig(mode="producer")
 
         with pytest.raises(RabbitVHostError):
-            config.rabbit_vhost = ""
-
-        with pytest.raises(RabbitVHostError):
-            config.rabbit_vhost = "   "
+            config.rabbit_vhost = vhost
 
     def test_rabbit_credentials_properties(self):
         """Test rabbit_user and rabbit_pass properties."""
@@ -208,21 +199,16 @@ class TestBunnyStreamConfigRabbitProperties:
         assert config.rabbit_user == "newuser"
         assert config.rabbit_pass == "newpass"
 
-    def test_rabbit_credentials_setter_with_invalid_values(self):
+    @pytest.mark.parametrize("user, password", [("", ""), ("   ", "   "), (1, 1)])
+    def test_rabbit_credentials_setter_with_invalid_values(self, user, password):
         """Test rabbit credentials setters with invalid values."""
         config = BunnyStreamConfig(mode="producer")
 
         with pytest.raises(RabbitCredentialsError):
-            config.rabbit_user = ""
+            config.rabbit_user = user
 
         with pytest.raises(RabbitCredentialsError):
-            config.rabbit_user = "   "
-
-        with pytest.raises(RabbitCredentialsError):
-            config.rabbit_pass = ""
-
-        with pytest.raises(RabbitCredentialsError):
-            config.rabbit_pass = "   "
+            config.rabbit_pass = password
 
 
 class TestBunnyStreamConfigExchangeName:
@@ -370,12 +356,15 @@ class TestBunnyStreamConfigSubscriptions:
         config = BunnyStreamConfig(mode="consumer")
         config._subscriptions = None
 
-        with pytest.raises(SubscriptionsNotSetError, match="Subscriptions have not been set."):
+        with pytest.raises(
+            SubscriptionsNotSetError, match="Subscriptions have not been set."
+        ):
             _ = config.subscription_mappings
 
     def test_subscription_mappings_returns_dict_correctly(self):
         """Test that subscription_mappings returns a dict of subscriptions."""
         config = BunnyStreamConfig(mode="consumer", exchange_name="test_exchange")
+        config._subscription_mappings = {}
 
         mappings = config.subscription_mappings
         assert isinstance(mappings, dict)
@@ -386,7 +375,7 @@ class TestBunnyStreamConfigSubscriptions:
         assert len(mappings) == 1
         print(mappings["test_exchange"])
         assert mappings["test_exchange"]["topics"] == []
-        assert mappings["test_exchange"]["type"] == 'topic'
+        assert mappings["test_exchange"]["type"] == "topic"
 
     def test_add_subscription(self):
         """Test adding a new subscription."""
@@ -425,7 +414,9 @@ class TestBunnyStreamConfigSubscriptions:
         config = BunnyStreamConfig(mode="consumer")
 
         # Attempt to remove a non-existent subscription
-        with pytest.raises(ValueError, match="Subscription for exchange 'nonexistent' not found"):
+        with pytest.raises(
+            ValueError, match="Subscription for exchange 'nonexistent' not found"
+        ):
             config.remove_subscription("nonexistent")
 
     def test_remove_subscription_with_no_subscriptions(self):
@@ -434,7 +425,9 @@ class TestBunnyStreamConfigSubscriptions:
 
         # Remove the default subscription
         config._subscriptions = None
-        with pytest.raises(SubscriptionsNotSetError, match="Subscriptions have not been set."):
+        with pytest.raises(
+            SubscriptionsNotSetError, match="Subscriptions have not been set."
+        ):
             config.remove_subscription("test_exchange")
 
     def test_add_subscription_works_when_subscriptions_are_none(self):
@@ -449,7 +442,9 @@ class TestBunnyStreamConfigSubscriptions:
         """Test adding a subscription with an invalid type."""
         config = BunnyStreamConfig(mode="consumer")
 
-        with pytest.raises(ValueError, match="Subscription must be an instance of Subscription."):
+        with pytest.raises(
+            ValueError, match="Subscription must be an instance of Subscription."
+        ):
             config.add_subscription("not_a_subscription")
 
     def test_subscriptions_raises_error_when_none(self):
@@ -457,7 +452,9 @@ class TestBunnyStreamConfigSubscriptions:
         config = BunnyStreamConfig(mode="consumer")
         config._subscriptions = None
 
-        with pytest.raises(SubscriptionsNotSetError, match="Subscriptions have not been set."):
+        with pytest.raises(
+            SubscriptionsNotSetError, match="Subscriptions have not been set."
+        ):
             _ = config.subscriptions
 
 
@@ -534,8 +531,10 @@ class TestBunnyStreamConfigAdvancedProperties:
 
     def test_ssl_options_setter_normal_case(self):
         """Test ssl_options setter with valid SSLOptions."""
-        from pika import SSLOptions
         from ssl import SSLContext
+
+        from pika import SSLOptions
+
         config = BunnyStreamConfig(mode="producer")
         ssl_options = SSLOptions(
             SSLContext(),  # Using default SSLContext for testing
@@ -692,17 +691,27 @@ class TestBunnyStreamConfigAdvancedProperties:
         config.tcp_options = None
         assert config.tcp_options is None
 
-    @patch.dict(os.environ, {"RABBITMQ_TCP_OPTIONS": '{"TCP_KEEPIDLE": 60, "TCP_KEEPINTVL": 10, "TCP_KEEPCNT": 5, "TCP_USER_TIMEOUT": 30000}'})
+    @patch.dict(
+        os.environ,
+        {
+            "RABBITMQ_TCP_OPTIONS": '{"TCP_KEEPIDLE": 60, "TCP_KEEPINTVL": 10, "TCP_KEEPCNT": 5, "TCP_USER_TIMEOUT": 30000}'
+        },
+    )
     def test_tcp_options_setter_with_valid_environment(self):
         """Test tcp_options setter with valid environment variable."""
         config = BunnyStreamConfig(mode="producer")
-        tcp_options = {"TCP_KEEPIDLE": 60, "TCP_KEEPINTVL": 10, "TCP_KEEPCNT": 5, "TCP_USER_TIMEOUT": 30000}
+        tcp_options = {
+            "TCP_KEEPIDLE": 60,
+            "TCP_KEEPINTVL": 10,
+            "TCP_KEEPCNT": 5,
+            "TCP_USER_TIMEOUT": 30000,
+        }
         assert isinstance(config.tcp_options, dict)
         for key, value in tcp_options.items():
             assert key in config.tcp_options
             assert config.tcp_options[key] == value
 
-    @patch.dict(os.environ, {"RABBITMQ_TCP_OPTIONS": '[bad_json'})
+    @patch.dict(os.environ, {"RABBITMQ_TCP_OPTIONS": "[bad_json"})
     def test_tcp_options_getter_with_invalid_jason_environment_value(self):
         """Test tcp_options getter with invalid environment variable."""
         config = BunnyStreamConfig(mode="producer")
@@ -720,14 +729,18 @@ class TestBunnyStreamConfigAdvancedProperties:
         """Test socket_timeout setter raises error on invalid type."""
         config = BunnyStreamConfig(mode="producer")
 
-        with pytest.raises(ValueError, match="Socket timeout must be a float or an integer."):
+        with pytest.raises(
+            ValueError, match="Socket timeout must be a float or an integer."
+        ):
             config.socket_timeout = "not_a_number"
 
     def test_socket_timeout_setter_with_invalid_value(self):
         """Test socket_timeout setter raises error on invalid value."""
         config = BunnyStreamConfig(mode="producer")
 
-        with pytest.raises(ValueError, match="Socket timeout must be a float or an integer."):
+        with pytest.raises(
+            ValueError, match="Socket timeout must be a positive float."
+        ):
             config.socket_timeout = 0
 
     def test_socket_timeout_setter_with_valid_value(self):
@@ -735,6 +748,399 @@ class TestBunnyStreamConfigAdvancedProperties:
         config = BunnyStreamConfig(mode="producer")
         config.socket_timeout = 5.0
         assert config.socket_timeout == 5.0
+
+    @patch.dict(os.environ, {"RABBITMQ_SOCKET_TIMEOUT": "5.0"})
+    def test_socket_timeout_getter_with_environment_value(self):
+        """Test socket_timeout getter with environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Environment variable should override the default
+        assert config.socket_timeout == 5.0
+
+    @patch.dict(os.environ, {"RABBITMQ_SOCKET_TIMEOUT": "invalid"})
+    def test_socket_timeout_getter_with_invalid_environment_value(self):
+        """Test socket_timeout getter with invalid environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Should fallback to default
+        assert config.socket_timeout == 10.0
+
+    def test_retry_delay_setter_with_invalid_type(self):
+        """Test retry_delay setter raises error on invalid type."""
+        config = BunnyStreamConfig(mode="producer")
+
+        with pytest.raises(
+            ValueError, match="Retry delay must be a float or an integer."
+        ):
+            config.retry_delay = "not_a_number"
+
+    def test_retry_delay_setter_with_invalid_value(self):
+        """Test retry_delay setter raises error on invalid value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        with pytest.raises(
+            ValueError, match="Retry delay must be a non-negative float."
+        ):
+            config.retry_delay = -1.0
+
+    def test_retry_delay_setter_with_valid_value(self):
+        """Test retry_delay setter with valid value."""
+        config = BunnyStreamConfig(mode="producer")
+        config.retry_delay = 2.0
+        assert config.retry_delay == 2.0
+
+    @patch.dict(os.environ, {"RABBITMQ_RETRY_DELAY": "invalid"})
+    def test_retry_delay_getter_with_invalid_environment_value(self):
+        """Test retry_delay getter with invalid environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Should fallback to default
+        assert config.retry_delay == 2.0
+
+    @patch.dict(os.environ, {"RABBITMQ_RETRY_DELAY": "3.0"})
+    def test_retry_delay_getter_with_environment_value(self):
+        """Test retry_delay getter with environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Environment variable should override the default
+        assert config.retry_delay == 3.0
+
+    def test_stack_timeout_setter_with_valide_integer(self):
+        """Test stack_timeout setter with valid integer."""
+        config = BunnyStreamConfig(mode="producer")
+        config.stack_timeout = 5
+        assert config.stack_timeout == 5
+
+    def test_stack_timeout_setter_with_valid_float(self):
+        """Test stack_timeout setter with valid float."""
+        config = BunnyStreamConfig(mode="producer")
+        config.stack_timeout = 5.5
+        assert config.stack_timeout == 5.5
+
+    def test_stack_timeout_setter_with_invalid_type(self):
+        """Test stack_timeout setter raises error on invalid type."""
+        config = BunnyStreamConfig(mode="producer")
+
+        with pytest.raises(
+            ValueError, match="Stack timeout must be a float or an integer."
+        ):
+            config.stack_timeout = "not_a_number"
+
+    def test_stack_timeout_setter_with_invalid_value(self):
+        """Test stack_timeout setter raises error on invalid value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        with pytest.raises(ValueError, match="Stack timeout must be a positive float."):
+            config.stack_timeout = -1
+
+    @patch.dict(os.environ, {"RABBITMQ_STACK_TIMEOUT": "3.0"})
+    def test_stack_timeout_getter_with_environment_valid_float_value(self):
+        """Test stack_timeout getter with environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Environment variable should override the default
+        assert config.stack_timeout == 3.0
+
+    @patch.dict(os.environ, {"RABBITMQ_STACK_TIMEOUT": "3"})
+    def test_stack_timeout_getter_with_environment_valid_integer_value(self):
+        """Test stack_timeout getter with environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Environment variable should override the default
+        assert config.stack_timeout == 3
+
+    @patch.dict(os.environ, {"RABBITMQ_STACK_TIMEOUT": "-3.0"})
+    def test_stack_timeout_getter_with_environment_invalid_float_value(self):
+        """Test stack_timeout getter with environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Environment variable should override the default
+        assert config.stack_timeout == 15.0
+
+    @patch.dict(os.environ, {"RABBITMQ_STACK_TIMEOUT": "-3"})
+    def test_stack_timeout_getter_with_environment_invalid_integer_value(self):
+        """Test stack_timeout getter with environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Environment variable should override the default
+        assert config.stack_timeout == 15.0
+
+    @patch.dict(os.environ, {"RABBITMQ_STACK_TIMEOUT": "invalid"})
+    def test_stack_timeout_getter_with_invalid_environment_value(self):
+        """Test stack_timeout getter with invalid environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Should fallback to default
+        assert config.stack_timeout == 15.0
+
+    def test_connection_attempts_setter_with_valid_integer(self):
+        """Test connection_attempts setter with valid integer."""
+        config = BunnyStreamConfig(mode="producer")
+        config.connection_attempts = 5
+        assert config.connection_attempts == 5
+
+    def test_connection_attempts_setter_with_invalid_type(self):
+        """Test connection_attempts setter raises error on invalid type."""
+        config = BunnyStreamConfig(mode="producer")
+
+        with pytest.raises(ValueError, match="Connection attempts must be an integer."):
+            config.connection_attempts = "not_an_integer"
+
+    def test_connection_attempts_setter_with_invalid_value(self):
+        """Test connection_attempts setter raises error on invalid value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        with pytest.raises(
+            ValueError, match="Connection attempts must be a greater than 1."
+        ):
+            config.connection_attempts = -1
+
+    @patch.dict(os.environ, {"RABBITMQ_CONNECTION_ATTEMPTS": "2"})
+    def test_connection_attempts_getter_with_environment_value_valid_integer(self):
+        """Test connection_attempts getter with environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Environment variable should override the default
+        assert config.connection_attempts == 2
+
+    @patch.dict(os.environ, {"RABBITMQ_CONNECTION_ATTEMPTS": "-2"})
+    def test_connection_attempts_getter_with_environment_value_invalid_integer(self):
+        """Test connection_attempts getter with environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Environment variable should override the default
+        assert config.connection_attempts == 2  # Default value
+
+    @patch.dict(os.environ, {"RABBITMQ_CONNECTION_ATTEMPTS": "-2.0"})
+    def test_connection_attempts_getter_with_environment_value_invalid_float(self):
+        """Test connection_attempts getter with environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Environment variable should override the default
+        assert config.connection_attempts == 2  # Default value
+
+    @patch.dict(os.environ, {"RABBITMQ_CONNECTION_ATTEMPTS": "not_an_integer"})
+    def test_connection_attempts_getter_with_invalid_environment_value(self):
+        """Test connection_attempts getter with invalid environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Should fallback to default
+        assert config.connection_attempts == 2
+
+    def test_blocked_connection_timeout_setter_with_valid_integer(self):
+        """Test blocked_connection_timeout setter with valid integer."""
+        config = BunnyStreamConfig(mode="producer")
+        config.blocked_connection_timeout = 10
+        assert config.blocked_connection_timeout == 10
+
+    def test_blocked_connection_timeout_setter_with_valid_float(self):
+        """Test blocked_connection_timeout setter with valid float."""
+        config = BunnyStreamConfig(mode="producer")
+        config.blocked_connection_timeout = 10.5
+        assert config.blocked_connection_timeout == 10.5
+
+    def test_blocked_connection_timeout_setter_with_valid_none(self):
+        """Test blocked_connection_timeout setter with None."""
+        config = BunnyStreamConfig(mode="producer")
+        config.blocked_connection_timeout = None
+        assert config.blocked_connection_timeout is None
+
+    def test_blocked_connection_timeout_setter_with_invalid_type(self):
+        """Test blocked_connection_timeout setter raises error on invalid type."""
+        config = BunnyStreamConfig(mode="producer")
+
+        with pytest.raises(
+            ValueError,
+            match="Blocked connection timeout must be a float or an integer.",
+        ):
+            config.blocked_connection_timeout = "not_a_number"
+
+    def test_blocked_connection_timeout_setter_with_invalid_value(self):
+        """Test blocked_connection_timeout setter raises error on invalid value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        with pytest.raises(
+            ValueError, match="Blocked connection timeout must be a non-negative float."
+        ):
+            config.blocked_connection_timeout = -1
+
+    def test_blocked_connection_setter_with_invalid_float(self):
+        """Test blocked_connection_timeout setter with invalid float."""
+        config = BunnyStreamConfig(mode="producer")
+
+        with pytest.raises(
+            ValueError, match="Blocked connection timeout must be a non-negative float."
+        ):
+            config.blocked_connection_timeout = -1.0
+
+    @patch.dict(os.environ, {"RABBITMQ_BLOCKED_CONNECTION_TIMEOUT": "10"})
+    def test_blocked_connection_timeout_getter_with_environment_value_valid_integer(
+        self,
+    ):
+        """Test blocked_connection_timeout getter with environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Environment variable should override the default
+        assert config.blocked_connection_timeout == 10
+
+    @patch.dict(os.environ, {"RABBITMQ_BLOCKED_CONNECTION_TIMEOUT": "10.5"})
+    def test_blocked_connection_timeout_getter_with_environment_value_valid_float(self):
+        """Test blocked_connection_timeout getter with environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Environment variable should override the default
+        assert config.blocked_connection_timeout == 10.5
+
+    @patch.dict(os.environ, {"RABBITMQ_BLOCKED_CONNECTION_TIMEOUT": "-10"})
+    def test_blocked_connection_timeout_getter_with_environment_value_invalid_integer(
+        self,
+    ):
+        """Test blocked_connection_timeout getter with environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Environment variable should override the default
+        assert config.blocked_connection_timeout is None
+
+    @patch.dict(os.environ, {"RABBITMQ_BLOCKED_CONNECTION_TIMEOUT": "-10.5"})
+    def test_blocked_connection_timeout_getter_with_environment_value_invalid_float(
+        self,
+    ):
+        """Test blocked_connection_timeout getter with environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Environment variable should override the default
+        assert config.blocked_connection_timeout is None
+
+    @patch.dict(os.environ, {"RABBITMQ_BLOCKED_CONNECTION_TIMEOUT": "not_a_number"})
+    def test_blocked_connection_timeout_getter_with_invalid_environment_value(self):
+        """Test blocked_connection_timeout getter with invalid environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Should fallback to default
+        assert config.blocked_connection_timeout is None
+
+    def test_hearbeat_setter_with_valid_integer(self):
+        """Test heartbeat setter with valid integer."""
+        config = BunnyStreamConfig(mode="producer")
+        config.heartbeat = 60
+        assert config.heartbeat == 60
+
+    def test_heartbeat_setter_with_invalid_integer(self):
+        """Test heartbeat setter raises error on invalid integer."""
+        config = BunnyStreamConfig(mode="producer")
+
+        with pytest.raises(
+            ValueError, match="Heartbeat must be a non-negative integer."
+        ):
+            config.heartbeat = -1
+
+    def test_heartbeat_setter_with_invalid_type(self):
+        """Test heartbeat setter raises error on invalid type."""
+        config = BunnyStreamConfig(mode="producer")
+
+        with pytest.raises(ValueError, match="Heartbeat must be an integer."):
+            config.heartbeat = "not_an_integer"
+
+    @patch.dict(os.environ, {"RABBITMQ_HEARTBEAT": "not_a_number"})
+    def test_heartbeat_getter_with_invalid_environment_value(self):
+        """Test heartbeat getter with invalid environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Should fallback to default
+        assert config.heartbeat is None
+
+    @patch.dict(os.environ, {"RABBITMQ_HEARTBEAT": "60"})
+    def test_heartbeat_getter_with_environment_value(self):
+        """Test heartbeat getter with environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Environment variable should override the default
+        assert config.heartbeat == 60
+
+    def test_heartbeat_getter_with_none(self):
+        """Test heartbeat getter returns None when not set."""
+        config = BunnyStreamConfig(mode="producer")
+        config._heartbeat = None
+
+        assert config.heartbeat is None
+
+    @pytest.mark.parametrize("frame_max", [4095, 131073, 131072])
+    def test_frame_max_setter_with_valid_and_invalid_values(self, frame_max):
+        """Test frame_max setter with valid and invalid values."""
+        config = BunnyStreamConfig(mode="producer")
+
+        if frame_max >= 4096 and frame_max <= 131072:
+            config.frame_max = frame_max
+            assert config.frame_max == frame_max
+        else:
+            with pytest.raises(ValueError):
+                config.frame_max = frame_max
+
+    def test_frame_max_setter_with_invalid_type(self):
+        """Test frame_max setter raises error on invalid type."""
+        config = BunnyStreamConfig(mode="producer")
+
+        with pytest.raises(ValueError, match="Frame max must be an integer."):
+            config.frame_max = "not_an_integer"
+
+    @patch.dict(os.environ, {"RABBITMQ_FRAME_MAX": "131072"})
+    def test_frame_max_getter_with_environment_value(self):
+        """Test frame_max getter with environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Environment variable should override the default
+        assert config.frame_max == 131072
+
+    @patch.dict(os.environ, {"RABBITMQ_FRAME_MAX": "invalid"})
+    def test_frame_max_getter_with_invalid_environment_value(self):
+        """Test frame_max getter with invalid environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Should fallback to default
+        assert config.frame_max == 131072
+
+    @pytest.mark.parametrize("channel_max", [1, 65535, 65535, 20, 70000, 0])
+    def test_channel_max_setter_with_valid_and_invalid_values(self, channel_max):
+        """Test channel_max setter with valid and invalid values."""
+        config = BunnyStreamConfig(mode="producer")
+
+        if channel_max >= 1 and channel_max <= 65535:
+            config.channel_max = channel_max
+            assert config.channel_max == channel_max
+        else:
+            with pytest.raises(ValueError):
+                config.channel_max = channel_max
+
+    def test_channel_max_setter_with_invalid_type(self):
+        """Test channel_max setter raises error on invalid type."""
+        config = BunnyStreamConfig(mode="producer")
+
+        with pytest.raises(ValueError, match="Channel max must be an integer."):
+            config.channel_max = "not_an_integer"
+
+    @patch.dict(os.environ, {"RABBITMQ_CHANNEL_MAX": "65535"})
+    def test_channel_max_getter_with_environment_value(self):
+        """Test channel_max getter with environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Environment variable should override the default
+        assert config.channel_max == 65535
+
+    @patch.dict(os.environ, {"RABBITMQ_CHANNEL_MAX": "0"})
+    def test_channel_max_getter_with_zero_environment_value(self):
+        """Test channel_max getter with zero environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Should fallback to default
+        assert config.channel_max == 65535
+
+    @patch.dict(os.environ, {"RABBITMQ_CHANNEL_MAX": "invalid"})
+    def test_channel_max_getter_with_invalid_environment_value(self):
+        """Test channel_max getter with invalid environment value."""
+        config = BunnyStreamConfig(mode="producer")
+
+        # Should fallback to default
+        assert config.channel_max == 65535
 
 
 class TestBunnyStreamConfigIntegration:
@@ -1025,7 +1431,7 @@ class TestBunnyStreamConfigValidateTCPOptions:
             "TCP_KEEPIDLE": False,
             "TCP_KEEPINTVL": False,
             "TCP_KEEPCNT": False,
-            "TCP_USER_TIMEOUT": 5000
+            "TCP_USER_TIMEOUT": 5000,
         }
         config = BunnyStreamConfig(mode="producer")
         config.tcp_options = custom_options
@@ -1034,7 +1440,9 @@ class TestBunnyStreamConfigValidateTCPOptions:
     def test_tcp_options_invalid_type(self):
         """Test TCP options with invalid type."""
         config = BunnyStreamConfig(mode="producer")
-        with pytest.raises(InvalidTCPOptionsError, match="CP options must be a dictionary."):
+        with pytest.raises(
+            InvalidTCPOptionsError, match="CP options must be a dictionary."
+        ):
             config.tcp_options = "invalid_type"
 
     def test_tcp_options_invalid_key(self):
@@ -1046,5 +1454,7 @@ class TestBunnyStreamConfigValidateTCPOptions:
     def test_tcp_options_empty_dict(self):
         """Test TCP options with invalid key."""
         config = BunnyStreamConfig(mode="producer")
-        with pytest.raises(InvalidTCPOptionsError, match="TCP options cannot be an empty dictionary."):
+        with pytest.raises(
+            InvalidTCPOptionsError, match="TCP options cannot be an empty dictionary."
+        ):
             config.tcp_options = {}

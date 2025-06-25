@@ -319,10 +319,7 @@ class BunnyStreamConfig:
                 f"{self._rabbit_host}:{self._rabbit_port}"
                 f"/{self._rabbit_vhost}"
             )
-            if self._rabbit_pass:
-                masked_url = self._url.replace(self._rabbit_pass, "***")
-            else:
-                masked_url = self._url
+            masked_url = self._url.replace(self._rabbit_pass, "***")
             self.logger.debug("Generated AMQP URL: %s", masked_url)
         return self._url
 
@@ -411,7 +408,7 @@ class BunnyStreamConfig:
         """
         if self._rabbit_vhost is None:
             self.logger.info("Rabbit vhost is not set, using default vhost '/'.")
-            self._rabbit_vhost = "/"
+            self._rabbit_vhost = DEFAULT_VHOST
         if not isinstance(self._rabbit_vhost, str):
             raise RabbitVHostError("Rabbit vhost must be a string.")
         if not self._rabbit_vhost.strip():
@@ -433,8 +430,6 @@ class BunnyStreamConfig:
         Side Effects:
             Updates the internal _rabbit_vhost attribute and resets the _url attribute.
         """
-        if value is None:
-            value = os.environ.get("RABBITMQ_VHOST", DEFAULT_VHOST)
         if not isinstance(value, str):
             raise RabbitVHostError("Rabbit vhost must be a string.")
         if not value.strip():
@@ -460,7 +455,7 @@ class BunnyStreamConfig:
         """
         if self._rabbit_user is None:
             self.logger.info("Rabbit user is not set, using default user 'guest'.")
-            self._rabbit_user = "guest"
+            self._rabbit_user = DEFAULT_USER
         if not isinstance(self._rabbit_user, str):
             raise RabbitCredentialsError("Rabbit user must be a string.")
         if not self._rabbit_user.strip():
@@ -483,8 +478,6 @@ class BunnyStreamConfig:
         Raises:
             RabbitCredentialsError: If the username is empty or not a string.
         """
-        if value is None:
-            value = os.environ.get("RABBITMQ_USER", DEFAULT_USER)
         if not isinstance(value, str):
             raise RabbitCredentialsError("Rabbit user must be a string.")
         if not value.strip():
@@ -512,7 +505,7 @@ class BunnyStreamConfig:
             self.logger.info(
                 "Rabbit password is not set, using default " "password 'guest'."
             )
-            self._rabbit_pass = "guest"
+            self._rabbit_pass = DEFAULT_PASS
         if not isinstance(self._rabbit_pass, str):
             raise RabbitCredentialsError("Rabbit password must be a string.")
         if not self._rabbit_pass.strip():
@@ -536,8 +529,6 @@ class BunnyStreamConfig:
         Raises:
             RabbitCredentialsError: If the password is empty or not a string.
         """
-        if value is None:
-            value = os.environ.get("RABBITMQ_PASS", DEFAULT_PASS)
         if not isinstance(value, str):
             raise RabbitCredentialsError("Rabbit password must be a string.")
         if not value.strip():
@@ -1240,8 +1231,8 @@ class BunnyStreamConfig:
             self._subscriptions = []
         self._subscriptions.append(subscription)
         self._subscription_mappings[subscription.exchange_name] = {
-            "topic": subscription.topics,
-            "exchange_type": subscription.exchange_type,
+            "topics": subscription.topics,
+            "type": subscription.exchange_type,
         }
         self.logger.debug(
             "Added subscription: %s type: %s topics: %s",
