@@ -5,10 +5,10 @@ This module provides the Warren class which handles RabbitMQ connection
 parameters, URL parsing, and configuration management.
 """
 
-from typing import Callable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
-import pika
-from pika.exchange_type import ExchangeType
+import pika  # type: ignore
+from pika.exchange_type import ExchangeType  # type: ignore
 
 from bunnystream.config import BunnyStreamConfig
 from bunnystream.exceptions import BunnyStreamConfigurationError, WarrenNotConnected
@@ -175,7 +175,7 @@ class Warren:
         # Open a channel when the connection opens
         connection.channel(on_open_callback=self.on_channel_open)
 
-    def on_channel_open(self, channel) -> None:
+    def on_channel_open(self, channel: Any) -> None:
         """
         Callback when the RabbitMQ channel is opened.
 
@@ -218,7 +218,7 @@ class Warren:
 
         self.logger.debug("Consumer setup completed")
 
-    def _declare_consumer_resources(self, subscription) -> None:
+    def _declare_consumer_resources(self, subscription: Any) -> None:
         """Declare exchange, queue, and bindings for a subscription."""
         if self._channel is None:
             raise WarrenNotConnected("Channel not available")
@@ -248,7 +248,9 @@ class Warren:
             subscription.topic,
         )
 
-    def on_connection_error(self, _connection: pika.SelectConnection, error: Exception) -> None:
+    def on_connection_error(
+        self, _connection: pika.SelectConnection, error: Exception
+    ) -> None:
         """
         Callback when there is an error opening the RabbitMQ connection.
 
@@ -294,14 +296,20 @@ class Warren:
         if self._channel is None:
             raise WarrenNotConnected("Cannot publish, channel not available.")
 
-        self.logger.debug("Publishing message to exchange '%s' with topic '%s'", exchange, topic)
-        self._channel.exchange_declare(exchange=exchange, exchange_type=exchange_type, durable=True)
+        self.logger.debug(
+            "Publishing message to exchange '%s' with topic '%s'", exchange, topic
+        )
+        self._channel.exchange_declare(
+            exchange=exchange, exchange_type=exchange_type, durable=True
+        )
 
         self._channel.basic_publish(
             exchange=exchange,
             routing_key=topic,
             body=message,
-            properties=pika.BasicProperties(content_type="application/json", delivery_mode=2),
+            properties=pika.BasicProperties(
+                content_type="application/json", delivery_mode=2
+            ),
         )
 
     def start_consuming(self, message_callback: Callable) -> None:
@@ -338,7 +346,9 @@ class Warren:
                 self._consumer_tag,
             )
 
-    def _on_message(self, channel, method, properties, body) -> None:
+    def _on_message(
+        self, channel: Any, method: Any, properties: Any, body: Any
+    ) -> None:
         """
         Internal message handler that wraps the user callback.
 

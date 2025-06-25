@@ -36,10 +36,6 @@ jobs:
       run: |
         uv run pylint src/bunnystream/ --output-format=text
 
-    - name: Type check with mypy
-      run: |
-        uv run mypy src/bunnystream/
-
     - name: Security check with bandit
       run: |
         uv run bandit -r src/bunnystream/

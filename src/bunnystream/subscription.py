@@ -10,7 +10,7 @@ Classes:
 
 from dataclasses import dataclass
 
-from pika.exchange_type import ExchangeType
+from pika.exchange_type import ExchangeType  # type: ignore
 
 
 @dataclass

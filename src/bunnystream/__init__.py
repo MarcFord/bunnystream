@@ -14,7 +14,7 @@ try:
 except ImportError:
     # Python < 3.8
     try:
-        from importlib_metadata import PackageNotFoundError, version
+        from importlib_metadata import PackageNotFoundError, version  # type: ignore
 
         __version__ = version("bunnystream")
     except ImportError:

@@ -133,6 +133,17 @@ strict_equality = true
 show_error_codes = true
 
 [[tool.mypy.overrides]]
+module = "bunnystream.config"
+# Allow Any returns and assignments for environment variable parsing
+warn_return_any = false
+disallow_any_unimported = false
+disallow_any_expr = false
+disallow_any_decorated = false
+disallow_any_explicit = false
+disallow_any_generics = false
+disallow_subclassing_any = false
+
+[[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
 

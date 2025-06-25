@@ -84,7 +84,7 @@ class BunnyStreamModeError(BunnyStreamError):
 class SSLOptionsError(BunnyStreamError):
     """Exception raised for errors in the RabbitMQ SSL options configuration."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         message = """
         BunnyStream uses the pika library for RabbitMQ connections.
         The SSLOptions class is provided by pika please refer to the pika documentation for more information:
@@ -115,7 +115,9 @@ class SubscriptionsNotSetError(BunnyStreamError):
 
     def __init__(
         self,
-        message: str = ("Subscriptions must be set before starting the BunnyStream consumer."),
+        message: str = (
+            "Subscriptions must be set before starting the BunnyStream consumer."
+        ),
     ):
         super().__init__(message)
 

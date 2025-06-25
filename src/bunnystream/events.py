@@ -32,13 +32,16 @@ import json
 import platform
 import socket
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 from uuid import UUID
 
-from pika.exchange_type import ExchangeType
+from pika.exchange_type import ExchangeType  # type: ignore
 
 from bunnystream import __version__ as bunnystream_version
 from bunnystream.exceptions import WarrenNotConfigured
-from bunnystream.warren import Warren
+
+if TYPE_CHECKING:
+    from bunnystream.warren import Warren
 
 
 class BaseEvent:
@@ -62,7 +65,7 @@ class BaseEvent:
     EXCHANGE = None
     EXCHANGE_TYPE = ExchangeType.topic
 
-    def __init__(self, warren: Warren, **data):
+    def __init__(self, warren: "Warren", **data) -> None:
         self._warren = warren
         self.data = data
 
@@ -96,7 +99,9 @@ class BaseEvent:
         try:
             self["_meta_"] = {
                 "hostname": str(platform.node()),
-                "timestamp": str(datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")),
+                "timestamp": str(
+                    datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                ),
                 "host_ip_address": str(self._get_host_ip_address()),
                 "host_os_in": self._get_os_info(),
                 "bunnystream_version": bunnystream_version,
@@ -104,7 +109,7 @@ class BaseEvent:
         except RuntimeError:
             pass
 
-        def uuid_convert(o):
+        def uuid_convert(o) -> str:
             if isinstance(o, UUID):
                 return o.hex
             return o
@@ -141,7 +146,9 @@ class BaseEvent:
 
         # At this point, EXCHANGE_TYPE is guaranteed to be valid due to the
         # fallback logic above
-        assert isinstance(self.EXCHANGE_TYPE, ExchangeType), "EXCHANGE_TYPE should be valid"
+        assert isinstance(
+            self.EXCHANGE_TYPE, ExchangeType
+        ), "EXCHANGE_TYPE should be valid"
 
         return self._warren.publish(
             topic=topic,
@@ -150,16 +157,18 @@ class BaseEvent:
             exchange_type=self.EXCHANGE_TYPE,
         )
 
-    def __getitem__(self, item):
+    def __getitem__(self, item) -> object:
         return self.data[item]
 
-    def __setitem__(self, key, value):
-        if value is not None and not isinstance(value, (list, dict, tuple, str, float, int, bool)):
+    def __setitem__(self, key, value) -> None:
+        if value is not None and not isinstance(
+            value, (list, dict, tuple, str, float, int, bool)
+        ):
             value = str(value)
 
         self.data[key] = value
 
-    def _get_host_ip_address(self):
+    def _get_host_ip_address(self) -> str:
         """
         Get the host IP address.
         This is a placeholder for the actual implementation.
@@ -172,7 +181,7 @@ class BaseEvent:
             ip_address = "127.0.0.1"
         return ip_address
 
-    def _get_os_info(self):
+    def _get_os_info(self) -> dict[str, str]:
         """
         Get the operating system information.
         This is a placeholder for the actual implementation.
