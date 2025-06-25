@@ -148,14 +148,15 @@ module = "tests.*"
 disallow_untyped_defs = false
 
 [tool.pylint.format]
-max-line-length = 100
+max-line-length = 114
 
 [tool.bandit]
 exclude_dirs = ["tests"]
 skips = ["B101"]  # Skip assert_used test
 
 [tool.flake8]
-max-line-length = 100
+max-line-length = 114
+
 extend-ignore = ["E203", "W503"]
 exclude = [
     ".git",
