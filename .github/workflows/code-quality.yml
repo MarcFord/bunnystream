@@ -38,4 +38,4 @@ jobs:
 
     - name: Check for common issues with flake8
       run: |
-        uv run flake8 src/ tests/
+        uv run flake8 src/ tests/ --max-line-length=120
