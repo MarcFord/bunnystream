@@ -1,6 +1,77 @@
-# Multi-Topic Warren Demo
+# BunnyStream Examples
+
+This directory contains comprehensive examples demonstrating different aspects of BunnyStream usage.
+
+## Available Examples
+
+### 1. Multi-Topic Warren Demo (`multi_topic_demo.py`)
 
 This demo shows how to use BunnyStream's Warren class to:
+
+1. **Set up a consumer that listens to multiple topics** 
+2. **Set up a producer that publishes events to multiple topics**
+3. **Handle different event types with specific routing**
+
+The demo simulates a simple e-commerce system with different business domains:
+- **Order events**: `order.created`, `order.updated`, `order.cancelled`
+- **User events**: `user.registered`, `user.updated`  
+- **Product events**: `product.created`, `product.updated`
+
+### 2. BaseReceivedEvent Demo (`received_events_demo.py`)
+
+**NEW!** This example demonstrates the new `BaseReceivedEvent` class for convenient message consumption:
+
+1. **Automatic JSON parsing** from incoming messages
+2. **Convenient access patterns** using both dictionary and attribute syntax
+3. **Nested data handling** with `DataObject` instances
+4. **Robust error handling** for malformed JSON and edge cases
+5. **Real-world event processing** with complex data structures
+
+Key features shown:
+- Use `event.customer.name` instead of `json.loads(body)['customer']['name']`
+- Handle nested objects seamlessly
+- Graceful handling of invalid JSON
+- Access event metadata easily
+
+**Requirements:** Running RabbitMQ instance
+
+### 2a. Standalone BaseReceivedEvent Demo (`standalone_received_events_demo.py`)
+
+**NEW!** A standalone version of the BaseReceivedEvent demo that doesn't require RabbitMQ:
+
+1. **Pure BaseReceivedEvent functionality** without message broker
+2. **Comprehensive edge case demonstration**
+3. **Real-world data examples** showing practical usage patterns
+4. **No dependencies** - runs immediately without setup
+
+Perfect for understanding BaseReceivedEvent capabilities before setting up RabbitMQ.
+
+### 3. Warren Events Demo (`warren_events_demo.py`)
+
+Basic example showing:
+- Simple event publishing and consuming
+- Custom event definition
+- Message handler implementation
+
+### 4. RabbitMQ URL Demo (`rabbitmq_url_demo.py`)
+
+Shows how to:
+- Configure BunnyStream using environment variables
+- Use `RABBITMQ_URL` for connection configuration
+- Set up SSL/TLS connections
+
+## Running Examples
+
+```bash
+# Run any example
+python examples/multi_topic_demo.py
+python examples/received_events_demo.py          # Requires RabbitMQ
+python examples/standalone_received_events_demo.py  # No RabbitMQ needed
+python examples/warren_events_demo.py
+python examples/rabbitmq_url_demo.py
+```
+
+## Multi-Topic Warren Demo Details
 
 1. **Set up a consumer that listens to multiple topics** 
 2. **Set up a producer that publishes events to multiple topics**

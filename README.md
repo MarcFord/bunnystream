@@ -101,13 +101,28 @@ warren.disconnect()
 ### Basic Consumer
 
 ```python
-import json
 from bunnystream import BunnyStreamConfig, Warren
 from bunnystream.subscription import Subscription
+from bunnystream.events import BaseReceivedEvent
 
 def message_handler(ch, method, properties, body):
-    message = json.loads(body.decode('utf-8'))
-    print(f"Received: {message}")
+    # Use BaseReceivedEvent for easy message handling
+    event = BaseReceivedEvent(body.decode('utf-8'))
+    
+    # Access data with dictionary syntax
+    print(f"Order ID: {event['order_id']}")
+    print(f"Customer: {event['customer_id']}")
+    print(f"Total: ${event['total']}")
+    
+    # Or use attribute syntax for cleaner code
+    print(f"Processing order {event.order_id} for customer {event.customer_id}")
+    
+    # Handle nested data easily
+    if 'customer' in event.data:
+        customer = event.customer  # Returns a DataObject
+        print(f"Customer name: {customer.name}")
+        print(f"Customer email: {customer.email}")
+    
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
 # Configure as consumer
@@ -157,16 +172,28 @@ producer.disconnect()
 Consumer that processes order events:
 
 ```python
-import json
 from bunnystream import BunnyStreamConfig, Warren
 from bunnystream.subscription import Subscription
+from bunnystream.events import BaseReceivedEvent
 
 def process_order(ch, method, properties, body):
     try:
-        order_data = json.loads(body.decode('utf-8'))
-        print(f"Processing order: {order_data['order_id']}")
-        print(f"Customer: {order_data['customer_id']}")
-        print(f"Total: ${order_data['total']}")
+        # Use BaseReceivedEvent for convenient message handling
+        order_event = BaseReceivedEvent(body.decode('utf-8'))
+        
+        print(f"Processing order: {order_event.order_id}")
+        print(f"Customer: {order_event.customer_id}")
+        print(f"Total: ${order_event.total}")
+        
+        # Access items array directly
+        for item in order_event.items:
+            print(f"  - {item}")
+        
+        # Access metadata if present
+        if '_meta_' in order_event.data:
+            meta = order_event._meta_
+            print(f"Event timestamp: {meta.timestamp}")
+            print(f"From host: {meta.hostname}")
         
         # Process the order...
         
@@ -222,15 +249,27 @@ for subscription in subscriptions:
     config.add_subscription(subscription)
 
 def handle_all_events(ch, method, properties, body):
-    message = json.loads(body.decode('utf-8'))
+    # Use BaseReceivedEvent for structured message access
+    event = BaseReceivedEvent(body.decode('utf-8'))
     routing_key = method.routing_key
     
     if routing_key.startswith('user.'):
-        print(f"User event: {message}")
+        print(f"User event: {event.event_type}")
+        if hasattr(event, 'user_id'):
+            print(f"  User ID: {event.user_id}")
+        if hasattr(event, 'email'):
+            print(f"  Email: {event.email}")
+            
     elif routing_key.startswith('order.'):
-        print(f"Order event: {message}")
+        print(f"Order event: {event.event_type}")
+        print(f"  Order ID: {event.order_id}")
+        print(f"  Total: ${event.total}")
+        
     elif routing_key.startswith('product.'):
-        print(f"Product event: {message}")
+        print(f"Product event: {event.event_type}")
+        print(f"  Product ID: {event.product_id}")
+        if hasattr(event, 'price'):
+            print(f"  Price: ${event.price}")
     
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
@@ -348,6 +387,73 @@ class BaseEvent:
     def json(self) -> str  # JSON-serialized event data
 ```
 
+### BaseReceivedEvent Class
+
+Base class for handling incoming messages with automatic JSON parsing and convenient access patterns.
+
+```python
+class BaseReceivedEvent:
+    EXCHANGE: Optional[str] = None
+    EXCHANGE_TYPE: ExchangeType = ExchangeType.topic
+    
+    def __init__(self, data: Union[dict, str])
+    
+    # Dictionary-style access
+    def __getitem__(self, key: str) -> Any
+    
+    # Attribute-style access  
+    def __getattr__(self, key: str) -> Any
+    
+    # Properties
+    @property
+    def data(self) -> Optional[dict]  # Parsed JSON data
+    @property  
+    def _raw_data(self) -> str  # Original raw data
+```
+
+**Usage Examples:**
+
+```python
+from bunnystream.events import BaseReceivedEvent
+
+# From JSON string
+event = BaseReceivedEvent('{"order_id": "12345", "total": 99.99}')
+
+# Dictionary access
+order_id = event["order_id"]  # "12345"
+
+# Attribute access (cleaner)
+total = event.total  # 99.99
+
+# Nested objects become DataObject instances
+event = BaseReceivedEvent('{"customer": {"name": "John", "email": "john@example.com"}}')
+customer_name = event.customer.name  # "John"
+customer_email = event.customer.email  # "john@example.com"
+
+# Handles malformed JSON gracefully
+bad_event = BaseReceivedEvent('invalid json')
+print(bad_event.data)  # None
+# Accessing data raises TypeError with helpful message
+```
+
+### DataObject Class
+
+Utility class for nested dictionary access with both dictionary and attribute syntax.
+
+```python
+class DataObject:
+    def __init__(self, data: dict)
+    
+    def __getitem__(self, key: str) -> Any  # dict["key"] syntax
+    def __getattr__(self, key: str) -> Any  # dict.key syntax
+```
+
+**Features:**
+- Recursive nesting: nested dictionaries become DataObject instances
+- Dual access: both `obj["key"]` and `obj.key` work
+- Type safety: clear error messages for missing keys
+- Preserves original data types for non-dict values
+
 ### Subscription Class
 
 Represents a subscription to a message exchange.
@@ -421,6 +527,61 @@ class UserRegistered(BaseEvent):
         })
 ```
 
+### Event Consumption
+
+BunnyStream provides `BaseReceivedEvent` for convenient message handling:
+
+```python
+from bunnystream.events import BaseReceivedEvent
+
+def handle_user_event(ch, method, properties, body):
+    # Automatic JSON parsing and convenient access
+    event = BaseReceivedEvent(body.decode('utf-8'))
+    
+    # Multiple access patterns
+    user_id = event["user_id"]  # Dictionary style
+    email = event.email         # Attribute style (cleaner)
+    
+    # Nested data handling
+    if "profile" in event.data:
+        profile = event.profile  # Returns DataObject
+        name = profile.name      # Nested attribute access
+        age = profile.age
+    
+    # Handle metadata
+    if "_meta_" in event.data:
+        timestamp = event._meta_.timestamp
+        hostname = event._meta_.hostname
+    
+    print(f"User {user_id} registered with email {email}")
+    ch.basic_ack(delivery_tag=method.delivery_tag)
+```
+
+### Robust Message Handling
+
+`BaseReceivedEvent` handles various message formats gracefully:
+
+```python
+# Valid JSON dictionary
+event1 = BaseReceivedEvent('{"key": "value"}')
+print(event1.key)  # "value"
+
+# Valid JSON but not a dictionary (stays as original type)
+event2 = BaseReceivedEvent('["item1", "item2"]')
+print(event2.data)  # ["item1", "item2"] - can't use attribute access
+
+# Invalid JSON (data becomes None, raw data preserved)
+event3 = BaseReceivedEvent('invalid json string')
+print(event3.data)      # None
+print(event3._raw_data)  # "invalid json string"
+
+# Trying to access invalid data raises helpful errors
+try:
+    event3.some_key
+except TypeError as e:
+    print(e)  # "Event data is not a dictionary or is empty."
+```
+
 ### Event Metadata
 
 Events automatically include metadata:
@@ -472,6 +633,8 @@ except WarrenNotConnected as e:
 BunnyStream includes several comprehensive examples:
 
 - **[Multi-Topic Demo](examples/multi_topic_demo.py)**: Complete multi-topic producer/consumer system
+- **[BaseReceivedEvent Demo](examples/received_events_demo.py)**: **NEW!** Demonstrates convenient message consumption with automatic JSON parsing and nested data access
+- **[Standalone BaseReceivedEvent Demo](examples/standalone_received_events_demo.py)**: **NEW!** Shows BaseReceivedEvent functionality without requiring RabbitMQ
 - **[Warren Events Demo](examples/warren_events_demo.py)**: Basic event publishing and consuming  
 - **[RabbitMQ URL Demo](examples/rabbitmq_url_demo.py)**: Environment variable configuration
 
@@ -480,6 +643,8 @@ Run any example:
 ```bash
 cd examples
 python multi_topic_demo.py
+python standalone_received_events_demo.py  # No RabbitMQ needed - try this first!
+python received_events_demo.py             # Requires RabbitMQ
 ```
 
 ## Development

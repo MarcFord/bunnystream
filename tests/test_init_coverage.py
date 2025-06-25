@@ -15,7 +15,9 @@ class TestPackageInitialization:
         original_modules = sys.modules.copy()
 
         # Remove bunnystream modules
-        modules_to_remove = [k for k in sys.modules.keys() if k.startswith("bunnystream")]
+        modules_to_remove = [
+            k for k in sys.modules.keys() if k.startswith("bunnystream")
+        ]
         for module in modules_to_remove:
             del sys.modules[module]
 
@@ -23,11 +25,17 @@ class TestPackageInitialization:
             # Mock importlib.metadata.version to raise ImportError
             with patch("importlib.metadata.version", side_effect=ImportError):
                 # Mock importlib_metadata.version to succeed
-                with patch("importlib_metadata.version", return_value="1.0.0") as mock_version:
+                with patch(
+                    "importlib_metadata.version", return_value="1.0.0"
+                ) as mock_version:
                     import bunnystream
 
-                    # The fallback should have been called
-                    mock_version.assert_called_once_with("bunnystream")
+                    # Fallback should be called twice: once in __init__.py, once in events.py
+                    assert mock_version.call_count == 2
+                    assert all(
+                        call[0][0] == "bunnystream"
+                        for call in mock_version.call_args_list
+                    )
                     assert bunnystream.__version__ == "1.0.0"
         finally:
             # Restore original modules
@@ -40,7 +48,9 @@ class TestPackageInitialization:
         original_modules = sys.modules.copy()
 
         # Remove bunnystream modules
-        modules_to_remove = [k for k in sys.modules.keys() if k.startswith("bunnystream")]
+        modules_to_remove = [
+            k for k in sys.modules.keys() if k.startswith("bunnystream")
+        ]
         for module in modules_to_remove:
             del sys.modules[module]
 
@@ -63,13 +73,17 @@ class TestPackageInitialization:
         original_modules = sys.modules.copy()
 
         # Remove bunnystream modules
-        modules_to_remove = [k for k in sys.modules.keys() if k.startswith("bunnystream")]
+        modules_to_remove = [
+            k for k in sys.modules.keys() if k.startswith("bunnystream")
+        ]
         for module in modules_to_remove:
             del sys.modules[module]
 
         try:
             # Mock to raise a general exception (not ImportError)
-            with patch("importlib.metadata.version", side_effect=Exception("Package not found")):
+            with patch(
+                "importlib.metadata.version", side_effect=Exception("Package not found")
+            ):
                 import bunnystream
 
                 # Should fall back to development version

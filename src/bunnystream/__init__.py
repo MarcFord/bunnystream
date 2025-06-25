@@ -25,6 +25,7 @@ except (PackageNotFoundError, Exception):  # pylint: disable=broad-exception-cau
 
 # Import main components
 from .config import BunnyStreamConfig
+from .events import BaseEvent, BaseReceivedEvent, DataObject
 from .exceptions import (
     BunnyStreamConfigurationError,
     BunnyStreamModeError,
@@ -47,6 +48,9 @@ __all__ = [
     "Warren",
     "BunnyStreamConfig",
     "Subscription",
+    "BaseEvent",
+    "BaseReceivedEvent",
+    "DataObject",
     "bunny_logger",
     "get_bunny_logger",
     "configure_bunny_logger",

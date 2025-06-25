@@ -2,15 +2,19 @@
 bunnystream.events
 ------------------
 
-This module defines the `BaseEvent` class, which provides a framework for creating
-and publishing events within the bunnystream system. Events are serializable objects
-that can be published to a message broker using a configured `Warren` instance. The
-module handles event metadata enrichment, serialization (including UUID handling), and
-publishing logic, with support for dynamic topic and exchange configuration.
+This module defines event classes for publishing and consuming messages within the
+bunnystream system. Events are serializable objects that can be published to a message
+broker using a configured `Warren` instance. The module handles event metadata enrichment,
+serialization (including UUID handling), publishing logic, and convenient message
+consumption with automatic JSON parsing.
 
 Classes:
     BaseEvent: Base class for defining publishable events with metadata and
         serialization support.
+    BaseReceivedEvent: Base class for consuming and parsing incoming messages with
+        convenient access patterns and automatic JSON handling.
+    DataObject: Utility class for nested dictionary access with both dictionary
+        and attribute syntax.
 
 Exceptions:
     WarrenNotConfigured: Raised when the event's warren or topic/exchange
@@ -32,16 +36,32 @@ import json
 import platform
 import socket
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Union
 from uuid import UUID
 
 from pika.exchange_type import ExchangeType  # type: ignore
 
-from bunnystream import __version__ as bunnystream_version
 from bunnystream.exceptions import WarrenNotConfigured
 
 if TYPE_CHECKING:
     from bunnystream.warren import Warren
+
+# Get version directly to avoid circular import
+try:
+    from importlib.metadata import PackageNotFoundError, version
+
+    bunnystream_version = version("bunnystream")
+except ImportError:
+    # Python < 3.8
+    try:
+        from importlib_metadata import PackageNotFoundError, version  # type: ignore
+
+        bunnystream_version = version("bunnystream")
+    except ImportError:
+        bunnystream_version = "0.0.1-dev"
+except (PackageNotFoundError, Exception):  # pylint: disable=broad-exception-caught
+    # Fallback for development mode or package not installed
+    bunnystream_version = "0.0.1-dev"
 
 
 class BaseEvent:
@@ -65,7 +85,7 @@ class BaseEvent:
     EXCHANGE = None
     EXCHANGE_TYPE = ExchangeType.topic
 
-    def __init__(self, warren: "Warren", **data) -> None:
+    def __init__(self, warren: "Warren", **data: Any) -> None:
         self._warren = warren
         self.data = data
 
@@ -98,10 +118,10 @@ class BaseEvent:
 
         self.set_metadata()
 
-        def uuid_convert(o) -> str:
+        def uuid_convert(o: Any) -> str:
             if isinstance(o, UUID):
                 return o.hex
-            return o
+            return str(o)
 
         return json.dumps(self.data, default=uuid_convert)
 
@@ -117,7 +137,7 @@ class BaseEvent:
         if self._warren is None:
             raise WarrenNotConfigured()
 
-        if self.EXCHANGE is None or not isinstance(self.EXCHANGE_TYPE, ExchangeType):
+        if self.EXCHANGE is None or not isinstance(self.EXCHANGE_TYPE, ExchangeType):  # type: ignore[unreachable]
             exchange_name = self._warren.config.exchange_name
             subscription = self._warren.config.subscription_mappings.get(exchange_name)
             if subscription is None:
@@ -146,11 +166,13 @@ class BaseEvent:
             exchange_type=self.EXCHANGE_TYPE,
         )
 
-    def __getitem__(self, item) -> object:
+    def __getitem__(self, item: Any) -> Any:
         return self.data[item]
 
-    def __setitem__(self, key, value) -> None:
-        if value is not None and not isinstance(value, (list, dict, tuple, str, float, int, bool)):
+    def __setitem__(self, key: Any, value: Any) -> None:
+        if value is not None and not isinstance(
+            value, (list, dict, tuple, str, float, int, bool)
+        ):
             value = str(value)
 
         self.data[key] = value
@@ -165,7 +187,9 @@ class BaseEvent:
         try:
             self["_meta_"] = {
                 "hostname": str(platform.node()),
-                "timestamp": str(datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")),
+                "timestamp": str(
+                    datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                ),
                 "host_ip_address": str(self._get_host_ip_address()),
                 "host_os_in": self._get_os_info(),
                 "bunnystream_version": bunnystream_version,
@@ -198,3 +222,92 @@ class BaseEvent:
             "machine": platform.machine(),
             "processor": platform.processor(),
         }
+
+
+class BaseReceivedEvent:
+    """
+    BaseReceivedEvent represents a base class for events received from a message broker.
+
+    Attributes:
+        EXCHANGE (str or None): The exchange to use for the event. Defaults to None
+                                (default exchange).
+        EXCHANGE_TYPE (ExchangeType): The type of exchange to use. Defaults to
+                                ExchangeType.topic.
+
+    Args:
+        data (Union[dict, str]): The event data, either as a dictionary or a JSON string.
+
+    Raises:
+        TypeError: If the provided data is not a dictionary or a JSON string.
+
+    Methods:
+        __getitem__(item):
+            Allows dictionary-like access to the event data.
+            Raises KeyError if the item is not found in the data.
+            Raises TypeError if the event data is not a dictionary or is empty.
+    """
+
+    EXCHANGE = None  # use the default exchange
+    EXCHANGE_TYPE = ExchangeType.topic  # use the default topic
+
+    def __init__(self, data: Union[dict, str]) -> None:
+        if isinstance(data, str):
+            self._raw_data = data
+            # Attempt to parse the string as JSON
+            try:
+                self.data = json.loads(data)
+            except json.JSONDecodeError:
+                self.data = None
+        elif isinstance(data, dict):
+            self._raw_data = json.dumps(data)
+            self.data = data
+        else:
+            raise TypeError("Data must be a dictionary or a JSON string.")
+
+    def __getitem__(self, item: Any) -> Any:
+        if self.data is not None and isinstance(self.data, dict):
+            if item not in self.data:
+                raise KeyError(f"Key '{item}' not found in event data.")
+            if isinstance(self.data[item], dict):
+                return DataObject(self.data[item])
+            return self.data[item]
+        raise TypeError("Event data is not a dictionary or is empty.")
+
+    def __getattr__(self, item: Any) -> Any:
+        """
+        Allows attribute-like access to the event data.
+        """
+        return self.__getitem__(item)
+
+
+class DataObject:
+    """
+    DataObject is a simple class that allows for dynamic attribute assignment.
+    It can be used to create objects with attributes that can be set and accessed
+    like a dictionary.
+
+    Example:
+        obj = DataObject()
+        obj.name = "example"
+        print(obj.name)  # Output: example
+    """
+
+    def __init__(self, data: dict) -> None:
+        if not isinstance(data, dict):
+            raise TypeError("Data must be a dictionary.")
+        self._data = data
+
+    def __getitem__(self, item: Any) -> Any:
+        if self._data is not None and isinstance(self._data, dict):
+            if item not in self._data:
+                raise KeyError(f"Key '{item}' not found in event data.")
+            if isinstance(self._data[item], dict):
+                return DataObject(self._data[item])
+            return self._data[item]
+        raise TypeError("Event data is not a dictionary or is empty.")
+
+    def __getattr__(self, item: Any) -> Any:
+        """
+        Allows attribute-like access to the event data.
+        """
+        return self.__getitem__(item)
