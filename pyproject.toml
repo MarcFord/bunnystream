@@ -147,6 +147,9 @@ ignore_errors = true
 module = "tests.*"
 disallow_untyped_defs = false
 
+[tool.pylint.format]
+max-line-length = 100
+
 [tool.bandit]
 exclude_dirs = ["tests"]
 skips = ["B101"]  # Skip assert_used test
