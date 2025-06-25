@@ -96,16 +96,7 @@ class BaseEvent:
             str: A JSON-formatted string representing the event data.
         """
 
-        try:
-            self["_meta_"] = {
-                "hostname": str(platform.node()),
-                "timestamp": str(datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")),
-                "host_ip_address": str(self._get_host_ip_address()),
-                "host_os_in": self._get_os_info(),
-                "bunnystream_version": bunnystream_version,
-            }
-        except RuntimeError:
-            pass
+        self.set_metadata()
 
         def uuid_convert(o) -> str:
             if isinstance(o, UUID):
@@ -144,9 +135,7 @@ class BaseEvent:
 
         # At this point, EXCHANGE_TYPE is guaranteed to be valid due to the
         # fallback logic above
-        assert isinstance(
-            self.EXCHANGE_TYPE, ExchangeType
-        ), "EXCHANGE_TYPE should be valid"  # nosec B101
+        assert isinstance(self.EXCHANGE_TYPE, ExchangeType), "EXCHANGE_TYPE should be valid"
 
         return self._warren.publish(
             topic=topic,
@@ -163,6 +152,24 @@ class BaseEvent:
             value = str(value)
 
         self.data[key] = value
+
+    def set_metadata(self) -> None:
+        """
+        Sets metadata information for the current instance, including hostname, timestamp,
+        host IP address, OS information, and the bunnystream version.
+        The metadata is stored under the "_meta_" key. If a RuntimeError occurs during
+        the process, it is silently ignored.
+        """
+        try:
+            self["_meta_"] = {
+                "hostname": str(platform.node()),
+                "timestamp": str(datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")),
+                "host_ip_address": str(self._get_host_ip_address()),
+                "host_os_in": self._get_os_info(),
+                "bunnystream_version": bunnystream_version,
+            }
+        except RuntimeError:
+            pass
 
     def _get_host_ip_address(self) -> str:
         """
