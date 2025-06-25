@@ -58,7 +58,7 @@ DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 5672
 DEFAULT_VHOST = "/"
 DEFAULT_USER = "guest"
-DEFAULT_PASS = "guest"
+DEFAULT_PASS = "guest"  # nosec B105 - This is the standard RabbitMQ default
 DEFAULT_EXCHANGE_NAME = "bunnystream"
 
 NOT_SET = "Not Set"

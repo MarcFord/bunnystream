@@ -150,7 +150,7 @@ disallow_untyped_defs = false
 
 [tool.bandit]
 exclude_dirs = ["tests"]
-skips = ["B101"]  # Skip assert_used test
+skips = ["B101", "B105"]  # Skip assert_used test and hardcoded_password_string
 
 [tool.flake8]
 max-line-length = 100

@@ -144,7 +144,9 @@ class BaseEvent:
 
         # At this point, EXCHANGE_TYPE is guaranteed to be valid due to the
         # fallback logic above
-        assert isinstance(self.EXCHANGE_TYPE, ExchangeType), "EXCHANGE_TYPE should be valid"
+        assert isinstance(
+            self.EXCHANGE_TYPE, ExchangeType
+        ), "EXCHANGE_TYPE should be valid"  # nosec B101
 
         return self._warren.publish(
             topic=topic,
