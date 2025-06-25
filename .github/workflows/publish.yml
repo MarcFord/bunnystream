@@ -82,4 +82,4 @@ jobs:
 
     - name: Publish package distributions to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
-      # Uses trusted publishing - no API token needed
+      # Uses OpenID Connect trusted publishing - no API token needed
