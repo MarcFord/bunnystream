@@ -1,186 +1,368 @@
 # BunnyStream
 
-A robust Python library for emitting/consuming events using RabbitMQ as a message broker, compatible with Python 3.9+.
+[![Tests](https://github.com/MarcFord/bunnystream/actions/workflows/test.yml/badge.svg)](https://github.com/MarcFord/bunnystream/actions/workflows/test.yml)
+[![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](https://github.com/MarcFord/bunnystream)
+[![Python Version](https://img.shields.io/badge/python-3.9%2B-blue)](https://python.org)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![PyPI version](https://badge.fury.io/py/bunnystream.svg)](https://badge.fury.io/py/bunnystream)
+
+A robust Python library for event-driven messaging using RabbitMQ as a message broker. BunnyStream provides a simple yet powerful interface for building scalable, event-driven applications with comprehensive support for publishing and consuming messages across multiple topics.
+
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Usage Examples](#usage-examples)
+  - [Basic Producer and Consumer](#basic-producer-and-consumer)
+  - [Multi-Topic Event System](#multi-topic-event-system)
+  - [Environment Configuration](#environment-configuration)
+- [API Reference](#api-reference)
+  - [Warren Class](#warren-class)
+  - [BunnyStreamConfig Class](#bunnystreamconfig-class)
+  - [BaseEvent Class](#baseevent-class)
+  - [Subscription Class](#subscription-class)
+- [Configuration](#configuration)
+- [Event System](#event-system)
+- [Error Handling](#error-handling)
+- [Examples](#examples)
+- [Development](#development)
+  - [Setting up Development Environment](#setting-up-development-environment)
+  - [Running Tests](#running-tests)
+  - [Code Quality](#code-quality)
+- [Contributing](#contributing)
+- [License](#license)
+- [Changelog](#changelog)
 
 ## Features
 
-- **Simple API**: Easy-to-use interface for RabbitMQ connection management
-- **Environment Variable Support**: Automatic parsing of `RABBITMQ_URL` environment variable
-- **Robust Error Handling**: Comprehensive validation and custom exceptions
-- **Logging Integration**: Built-in logging for debugging and monitoring
-- **Type Safety**: Full type hints for better development experience
-- **High Test Coverage**: >90% test coverage with comprehensive test suite
+- **🚀 Simple API**: Easy-to-use interface for RabbitMQ connection and message management
+- **🎯 Event-Driven Architecture**: Built-in support for domain events with automatic serialization
+- **🔀 Multi-Topic Support**: Publish and consume across multiple topics with pattern matching
+- **🌍 Environment Integration**: Automatic parsing of `RABBITMQ_URL` and other environment variables
+- **🛡️ Robust Error Handling**: Comprehensive validation and custom exceptions with detailed error messages
+- **📊 Logging Integration**: Built-in structured logging for debugging and monitoring
+- **🔒 Type Safety**: Full type hints and mypy compatibility for better development experience
+- **✅ High Test Coverage**: 100% test coverage with comprehensive test suite
+- **📦 Modern Python**: Compatible with Python 3.9+ using modern Python features
 
 ## Installation
+
+### Using pip
 
 ```bash
 pip install bunnystream
 ```
 
-Or with uv:
+### Using uv (recommended)
 
 ```bash
 uv add bunnystream
 ```
 
+### From source
+
+```bash
+git clone https://github.com/MarcFord/bunnystream.git
+cd bunnystream
+uv sync
+```
+
 ## Quick Start
 
-### Basic Usage
+### Basic Producer
 
 ```python
 from bunnystream import BunnyStreamConfig, Warren
+from bunnystream.events import BaseEvent
 
-# Create configuration
-config = BunnyStreamConfig(
-    mode="producer",  # or "consumer"
-    exchange_name="my_exchange",
-    rabbit_host="localhost",
-    rabbit_port=5672,
-    rabbit_vhost="/",
-    rabbit_user="guest",
-    rabbit_pass="guest"
-)
-
-# Create Warren instance
-warren = Warren(config)
-
-# Access connection parameters
-connection_params = warren.connection_parameters
-print(f"Connecting to {config.rabbit_host}:{config.rabbit_port}")
-```
-
-### Using Configuration Objects
-
-```python
-from bunnystream import BunnyStreamConfig, Warren
-
-# Minimal configuration (uses defaults)
-config = BunnyStreamConfig(mode="producer")
-warren = Warren(config)
-
-# Configuration with custom settings
-config = BunnyStreamConfig(
-    mode="consumer",
-    exchange_name="events",
-    rabbit_host="rabbitmq.example.com",
-    rabbit_port=5673
-)
-warren = Warren(config)
-
-# Modify configuration after creation
-warren.config.rabbit_host = "new-host.com"
-warren.bunny_mode = "producer"  # Change mode
-```
-
-### Environment Variable Configuration
-
-BunnyStream supports automatic configuration via the `RABBITMQ_URL` environment variable:
-
-```bash
-export RABBITMQ_URL="amqp://myuser:mypass@rabbit.example.com:5673/myvhost"
-```
-
-```python
-from bunnystream import BunnyStreamConfig, Warren
-
-# Configuration will automatically parse RABBITMQ_URL
-config = BunnyStreamConfig(mode="producer")
-warren = Warren(config)
-
-print(config.rabbit_host)  # rabbit.example.com
-print(config.rabbit_port)  # 5673
-print(config.rabbit_user)  # myuser
-print(config.rabbit_pass)  # mypass
-print(config.rabbit_vhost) # /myvhost
-```
-
-### Constructor Parameters Override Environment
-
-You can override specific parameters while using others from the environment:
-
-```python
-from bunnystream import BunnyStreamConfig, Warren
-
-# Override host and port, but use environment for credentials
+# Configure as producer
 config = BunnyStreamConfig(
     mode="producer",
-    rabbit_host="localhost",  # Override environment
-    rabbit_port=5672,         # Override environment
-    # rabbit_user and rabbit_pass will come from RABBITMQ_URL
+    exchange_name="my_events",
+    rabbit_host="localhost"
 )
-warren = Warren(config)
-```
-
-### Advanced Configuration
-
-```python
-from bunnystream import BunnyStreamConfig, Warren, Subscription
-from pika.exchange_type import ExchangeType
-
-# Create configuration with advanced settings
-config = BunnyStreamConfig(
-    mode="consumer",
-    exchange_name="events",
-    rabbit_host="localhost",
-    rabbit_port=5672
-)
-
-# Configure advanced connection parameters
-config.heartbeat = 600
-config.connection_attempts = 3
-config.retry_delay = 5.0
-config.prefetch_count = 10  # For consumers
-
-# Add multiple subscriptions (for consumers)
-subscription1 = Subscription(
-    exchange_name="events",
-    exchange_type=ExchangeType.topic,
-    topics=["user.*", "order.*"]
-)
-subscription2 = Subscription(
-    exchange_name="notifications",
-    exchange_type=ExchangeType.direct
-)
-
-config.add_subscription(subscription1)
-config.add_subscription(subscription2)
 
 # Create Warren instance
 warren = Warren(config)
 
-# Access connection parameters for pika
-connection_params = warren.connection_parameters
+# Define custom event
+class OrderCreated(BaseEvent):
+    TOPIC = "order.created"
+    EXCHANGE = "my_events"
+
+# Connect and publish
+warren.connect()
+event = OrderCreated(warren, order_id="12345", customer_id="67890", total=99.99)
+event.fire()
+warren.disconnect()
 ```
+
+### Basic Consumer
 
 ```python
-import os
+import json
+from bunnystream import BunnyStreamConfig, Warren
+from bunnystream.subscription import Subscription
 
-os.environ['RABBITMQ_URL'] = "amqp://envuser:envpass@env.example.com:5672/envvhost"
+def message_handler(ch, method, properties, body):
+    message = json.loads(body.decode('utf-8'))
+    print(f"Received: {message}")
+    ch.basic_ack(delivery_tag=method.delivery_tag)
 
-# Override only the host, keep other values from environment
-warren = Warren(rabbit_host="override.example.com")
+# Configure as consumer
+config = BunnyStreamConfig(mode="consumer", exchange_name="my_events")
+config.add_subscription(
+    Subscription(exchange_name="my_events", topic="order.*")
+)
 
-print(warren.rabbit_host)  # override.example.com (overridden)
-print(warren.rabbit_user)  # envuser (from environment)
-print(warren.rabbit_pass)  # envpass (from environment)
-print(warren.rabbit_vhost) # /envvhost (from environment)
+# Create Warren instance and start consuming
+warren = Warren(config)
+warren.connect()
+warren.start_consuming(message_handler)
+# warren.start_io_loop()  # Blocks until stopped
 ```
 
-### URL-Encoded Special Characters
+## Usage Examples
 
-BunnyStream automatically handles URL-encoded special characters in credentials:
+### Basic Producer and Consumer
+
+Create a simple producer that publishes order events:
+
+```python
+from bunnystream import BunnyStreamConfig, Warren
+from bunnystream.events import BaseEvent
+
+class OrderEvent(BaseEvent):
+    TOPIC = "order.created"
+    EXCHANGE = "ecommerce"
+
+# Producer setup
+producer_config = BunnyStreamConfig(mode="producer", exchange_name="ecommerce")
+producer = Warren(producer_config)
+producer.connect()
+
+# Create and publish event
+order = OrderEvent(
+    warren=producer,
+    order_id="ORD-001",
+    customer_id="CUST-123",
+    total=49.99,
+    items=["product-1", "product-2"]
+)
+order.fire()
+producer.disconnect()
+```
+
+Consumer that processes order events:
+
+```python
+import json
+from bunnystream import BunnyStreamConfig, Warren
+from bunnystream.subscription import Subscription
+
+def process_order(ch, method, properties, body):
+    try:
+        order_data = json.loads(body.decode('utf-8'))
+        print(f"Processing order: {order_data['order_id']}")
+        print(f"Customer: {order_data['customer_id']}")
+        print(f"Total: ${order_data['total']}")
+        
+        # Process the order...
+        
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+    except Exception as e:
+        print(f"Error processing order: {e}")
+        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+
+# Consumer setup
+consumer_config = BunnyStreamConfig(mode="consumer", exchange_name="ecommerce")
+consumer_config.add_subscription(
+    Subscription(exchange_name="ecommerce", topic="order.created")
+)
+
+consumer = Warren(consumer_config)
+consumer.connect()
+consumer.start_consuming(process_order)
+```
+
+### Multi-Topic Event System
+
+BunnyStream excels at multi-topic event systems. See the complete [Multi-Topic Demo](examples/multi_topic_demo.py) for a comprehensive example.
+
+```python
+from bunnystream import BunnyStreamConfig, Warren
+from bunnystream.subscription import Subscription
+from bunnystream.events import BaseEvent
+
+# Define events for different domains
+class UserRegistered(BaseEvent):
+    TOPIC = "user.registered"
+    EXCHANGE = "app_events"
+
+class OrderCreated(BaseEvent):
+    TOPIC = "order.created"
+    EXCHANGE = "app_events"
+
+class ProductUpdated(BaseEvent):
+    TOPIC = "product.updated"
+    EXCHANGE = "app_events"
+
+# Multi-topic consumer setup
+config = BunnyStreamConfig(mode="consumer", exchange_name="app_events")
+
+# Subscribe to multiple topic patterns
+subscriptions = [
+    Subscription(exchange_name="app_events", topic="user.*"),
+    Subscription(exchange_name="app_events", topic="order.*"),
+    Subscription(exchange_name="app_events", topic="product.*")
+]
+
+for subscription in subscriptions:
+    config.add_subscription(subscription)
+
+def handle_all_events(ch, method, properties, body):
+    message = json.loads(body.decode('utf-8'))
+    routing_key = method.routing_key
+    
+    if routing_key.startswith('user.'):
+        print(f"User event: {message}")
+    elif routing_key.startswith('order.'):
+        print(f"Order event: {message}")
+    elif routing_key.startswith('product.'):
+        print(f"Product event: {message}")
+    
+    ch.basic_ack(delivery_tag=method.delivery_tag)
+
+consumer = Warren(config)
+consumer.connect()
+consumer.start_consuming(handle_all_events)
+```
+
+### Environment Configuration
+
+BunnyStream supports automatic configuration via environment variables:
 
 ```bash
-export RABBITMQ_URL="amqp://user%40domain:p%40ssw0rd@host.com:5672/"
+# Set RabbitMQ connection URL
+export RABBITMQ_URL="amqp://user:pass@rabbitmq.example.com:5672/production"
+
+# Or set individual components
+export RABBITMQ_HOST="rabbitmq.example.com"
+export RABBITMQ_PORT="5672"
+export RABBITMQ_USER="myuser"
+export RABBITMQ_PASS="mypass"
+export RABBITMQ_VHOST="/production"
 ```
 
 ```python
-warren = Warren()
-print(warren.rabbit_user)  # user@domain (automatically decoded)
-print(warren.rabbit_pass)  # p@ssw0rd (automatically decoded)
+from bunnystream import BunnyStreamConfig, Warren
+
+# Configuration automatically uses environment variables
+config = BunnyStreamConfig(mode="producer")
+warren = Warren(config)
+
+print(f"Connecting to: {config.rabbit_host}:{config.rabbit_port}")
+print(f"Using vhost: {config.rabbit_vhost}")
 ```
 
-## RABBITMQ_URL Format
+## API Reference
+
+### Warren Class
+
+The main class for managing RabbitMQ connections and operations.
+
+```python
+class Warren:
+    def __init__(self, config: BunnyStreamConfig)
+    
+    # Connection management
+    def connect(self) -> None
+    def disconnect(self) -> None
+    def start_io_loop(self) -> None
+    def stop_io_loop(self) -> None
+    
+    # Publishing
+    def publish(self, message: str, exchange: str, topic: str, 
+                exchange_type: ExchangeType = ExchangeType.topic) -> None
+    
+    # Consuming
+    def start_consuming(self, callback: Callable) -> None
+    def stop_consuming(self) -> None
+    
+    # Properties
+    @property
+    def config(self) -> BunnyStreamConfig
+    @property
+    def bunny_mode(self) -> str
+    @property
+    def connection_parameters(self) -> pika.ConnectionParameters
+```
+
+### BunnyStreamConfig Class
+
+Configuration class for BunnyStream connections.
+
+```python
+class BunnyStreamConfig:
+    def __init__(
+        self,
+        mode: str,  # "producer" or "consumer"
+        exchange_name: Optional[str] = None,
+        rabbit_host: Optional[str] = None,
+        rabbit_port: Optional[Union[int, str]] = None,
+        rabbit_vhost: Optional[str] = None,
+        rabbit_user: Optional[str] = None,
+        rabbit_pass: Optional[str] = None
+    )
+    
+    # Subscription management
+    def add_subscription(self, subscription: Subscription) -> None
+    def remove_subscription(self, subscription: Subscription) -> None
+    
+    # Properties for connection parameters
+    @property
+    def url(self) -> str  # Complete AMQP URL
+    @property
+    def subscriptions(self) -> List[Subscription]
+    @property
+    def subscription_mappings(self) -> Dict[str, Dict]
+```
+
+### BaseEvent Class
+
+Base class for creating domain events.
+
+```python
+class BaseEvent:
+    TOPIC: Optional[str] = None
+    EXCHANGE: Optional[str] = None
+    EXCHANGE_TYPE: ExchangeType = ExchangeType.topic
+    
+    def __init__(self, warren: Warren, **data)
+    
+    def fire(self) -> None  # Publish the event
+    def serialize(self) -> str  # Get JSON representation
+    
+    @property
+    def json(self) -> str  # JSON-serialized event data
+```
+
+### Subscription Class
+
+Represents a subscription to a message exchange.
+
+```python
+@dataclass
+class Subscription:
+    exchange_name: str
+    exchange_type: ExchangeType = ExchangeType.topic
+    topic: str = ""
+```
+
+## Configuration
+
+### RabbitMQ URL Format
 
 The `RABBITMQ_URL` environment variable should follow this format:
 
@@ -193,153 +375,243 @@ Examples:
 - `amqps://user:pass@secure.example.com:5671/production`
 - `amqp://myuser@rabbit.local:5672/app`
 
-Supported schemes:
-- `amqp` - Standard AMQP connection
-- `amqps` - Secure AMQP connection over TLS
-
-## API Reference
-
-### Warren Class
-
-The main class for managing RabbitMQ connection parameters.
-
-#### Constructor
+### Advanced Configuration
 
 ```python
-Warren(
-    rabbit_port: int = 5672,
-    rabbit_vhost: str = "/",
-    rabbit_host: Optional[str] = None,
-    rabbit_user: Optional[str] = None,
-    rabbit_pass: Optional[str] = None
-)
+config = BunnyStreamConfig(mode="consumer")
+
+# Connection settings
+config.heartbeat = 600
+config.connection_attempts = 3
+config.retry_delay = 5.0
+config.socket_timeout = 10.0
+
+# Consumer settings
+config.prefetch_count = 10
+
+# SSL settings (for amqps://)
+config.ssl = True
+config.ssl_options = {
+    'ca_certs': '/path/to/ca.pem',
+    'cert_reqs': ssl.CERT_REQUIRED
+}
 ```
 
-**Parameters:**
-- `rabbit_port`: RabbitMQ server port (default: 5672)
-- `rabbit_vhost`: Virtual host (default: "/")
-- `rabbit_host`: RabbitMQ server hostname
-- `rabbit_user`: Username for authentication
-- `rabbit_pass`: Password for authentication
+## Event System
 
-#### Properties
+BunnyStream provides a powerful event system built on top of RabbitMQ:
 
-- `rabbit_host`: Get/set the RabbitMQ hostname
-- `rabbit_port`: Get/set the RabbitMQ port
-- `rabbit_vhost`: Get/set the virtual host
-- `rabbit_user`: Get/set the username
-- `rabbit_pass`: Get/set the password
-- `url`: Get the complete AMQP connection URL (read-only)
-
-#### Example
+### Event Definition
 
 ```python
-warren = Warren()
-warren.rabbit_host = "localhost"
-warren.rabbit_port = 5672
-warren.rabbit_user = "admin"
-warren.rabbit_pass = "secret"
+from bunnystream.events import BaseEvent
+from pika.exchange_type import ExchangeType
 
-print(warren.url)  # amqp://admin:secret@localhost:5672//
+class UserRegistered(BaseEvent):
+    TOPIC = "user.registered"
+    EXCHANGE = "user_events"
+    EXCHANGE_TYPE = ExchangeType.topic
+    
+    def __init__(self, warren: Warren, user_id: str, email: str, **kwargs):
+        super().__init__(warren, **kwargs)
+        self.data.update({
+            'event_type': 'user.registered',
+            'user_id': user_id,
+            'email': email
+        })
+```
+
+### Event Metadata
+
+Events automatically include metadata:
+
+```python
+event = UserRegistered(warren, user_id="123", email="user@example.com")
+print(event.json)
+# {
+#   "event_type": "user.registered",
+#   "user_id": "123", 
+#   "email": "user@example.com",
+#   "_meta_": {
+#     "hostname": "app-server-01",
+#     "timestamp": "2025-01-01 12:00:00",
+#     "host_ip_address": "10.0.1.5",
+#     "host_os_info": {...},
+#     "bunnystream_version": "1.0.0"
+#   }
+# }
 ```
 
 ## Error Handling
 
-BunnyStream provides custom exceptions for different error scenarios:
+BunnyStream provides comprehensive error handling:
 
 ```python
-from bunnystream import Warren
 from bunnystream.exceptions import (
-    RabbitPortError,
+    BunnyStreamConfigurationError,
+    WarrenNotConnected,
     RabbitHostError,
-    RabbitVHostError,
-    RabbitCredentialsError
+    RabbitPortError,
+    SubscriptionsNotSetError
 )
 
 try:
-    warren = Warren(rabbit_port=-1)  # Invalid port
-except RabbitPortError as e:
-    print(f"Port error: {e}")
+    config = BunnyStreamConfig(mode="invalid_mode")
+except BunnyStreamConfigurationError as e:
+    print(f"Configuration error: {e}")
 
 try:
-    warren = Warren()
-    warren.rabbit_host = ""  # Empty host
-except RabbitHostError as e:
-    print(f"Host error: {e}")
+    warren = Warren(config)
+    warren.publish("message", "exchange", "topic")  # Without connecting
+except WarrenNotConnected as e:
+    print(f"Connection error: {e}")
 ```
 
-## Logging
+## Examples
 
-BunnyStream includes built-in logging for debugging and monitoring:
+BunnyStream includes several comprehensive examples:
 
-```python
-import logging
-from bunnystream import Warren
+- **[Multi-Topic Demo](examples/multi_topic_demo.py)**: Complete multi-topic producer/consumer system
+- **[Warren Events Demo](examples/warren_events_demo.py)**: Basic event publishing and consuming  
+- **[RabbitMQ URL Demo](examples/rabbitmq_url_demo.py)**: Environment variable configuration
 
-# Enable debug logging
-logging.basicConfig(level=logging.DEBUG)
+Run any example:
 
-warren = Warren(rabbit_host="localhost")
-# [2024-01-01 12:00:00,000] bunnystream.warren - DEBUG - Warren initialized with port=5672, vhost=/, host=localhost
+```bash
+cd examples
+python multi_topic_demo.py
 ```
 
 ## Development
 
+### Setting up Development Environment
+
+```bash
+# Clone the repository
+git clone https://github.com/MarcFord/bunnystream.git
+cd bunnystream
+
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install dependencies and create virtual environment
+uv sync --dev
+
+# Activate virtual environment
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+```
+
 ### Running Tests
 
 ```bash
-# Install development dependencies
-uv sync --dev
-
 # Run all tests
-python -m pytest
+make test
 
-# Run with coverage
-python -m pytest --cov=bunnystream --cov-report=term-missing
+# Run tests with coverage report
+make test-coverage
+
+# Run specific test file
+python -m pytest tests/test_warren.py -v
+
+# Run tests with coverage details
+python -m pytest --cov=src/bunnystream --cov-report=term-missing
 ```
 
-### Releasing
-
-BunnyStream uses automated version management and releases. To create a new release:
+### Code Quality
 
 ```bash
-# Interactive release (recommended)
-./release.sh
+# Run all quality checks
+make lint
 
-# Or use Makefile commands
-make release-patch   # For bug fixes (x.y.Z)
-make release-minor   # For new features (x.Y.0)
-make release-major   # For breaking changes (X.0.0)
+# Run individual tools
+make format        # Black + isort formatting
+make type-check    # mypy type checking
+make lint-check    # pylint code analysis
 
-# Or use the Python script directly
-python scripts/bump_version.py patch --dry-run  # Preview changes
-python scripts/bump_version.py minor            # Create minor release
+# Pre-commit checks
+make pre-release   # Run all checks before releasing
 ```
 
-The release process automatically:
-- Runs all tests and quality checks
-- Calculates the new version number
-- Creates and pushes a git tag
-- Triggers GitHub Actions to build and publish to PyPI
-- Creates a GitHub release
-
-For detailed release documentation, see [RELEASE.md](RELEASE.md).
-
-### Development Commands
+### Available Make Commands
 
 ```bash
-make help           # Show all available commands
-make test           # Run tests with coverage
-make lint           # Run code quality checks
-make build          # Build the package
-make clean          # Clean build artifacts
-make pre-release    # Run all checks before release
+make help          # Show all available commands
+make clean         # Clean build artifacts
+make build         # Build the package
+make release-patch # Create patch release (x.y.Z)
+make release-minor # Create minor release (x.Y.0)  
+make release-major # Create major release (X.0.0)
 ```
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+We welcome contributions! Here's how to get started:
+
+### 1. Fork and Clone
+
+```bash
+git clone https://github.com/YOUR_USERNAME/bunnystream.git
+cd bunnystream
+```
+
+### 2. Set up Development Environment
+
+```bash
+uv sync --dev
+source .venv/bin/activate
+```
+
+### 3. Create a Feature Branch
+
+```bash
+git checkout -b feature/your-feature-name
+```
+
+### 4. Make Your Changes
+
+- Write your code following the existing style
+- Add tests for new functionality
+- Update documentation as needed
+- Ensure all tests pass: `make test`
+- Check code quality: `make lint`
+
+### 5. Submit a Pull Request
+
+- Push your branch to your fork
+- Create a pull request with a clear description
+- Ensure all CI checks pass
+
+### Development Guidelines
+
+- **Testing**: Maintain 100% test coverage
+- **Documentation**: Update docstrings and README for new features
+- **Type Hints**: Include type hints for all new code
+- **Code Style**: Follow PEP 8, use Black for formatting
+- **Commit Messages**: Use clear, descriptive commit messages
+
+### Reporting Issues
+
+- Use the [GitHub issue tracker](https://github.com/MarcFord/bunnystream/issues)
+- Include Python version, BunnyStream version, and RabbitMQ version
+- Provide a minimal reproducible example
+- Check existing issues before creating new ones
+
+## License
+
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+
+The GPL v3 ensures that BunnyStream remains free and open source, and that any derivatives or improvements are also shared with the community.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a detailed list of changes in each version.
+
+## Support
+
+- **Documentation**: [GitHub README](https://github.com/MarcFord/bunnystream#readme)
+- **Issues**: [GitHub Issues](https://github.com/MarcFord/bunnystream/issues)
+- **Source Code**: [GitHub Repository](https://github.com/MarcFord/bunnystream)
+
+---
+
+**BunnyStream** - Making event-driven messaging simple and reliable. 🐰✨
