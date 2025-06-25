@@ -174,6 +174,14 @@ class TestWarren:
             exchange="test_exchange", exchange_type=ExchangeType.topic, durable=True
         )
 
+    def test_setup_producer_no_channel(self):
+        """Test _setup_producer when channel is None."""
+        # Force channel to be None
+        self.warren._channel = None
+
+        with pytest.raises(WarrenNotConnected, match="Channel not available"):
+            self.warren._setup_producer()
+
     def test_setup_consumer(self):
         """Test _setup_consumer method."""
         mock_channel = Mock()
@@ -191,6 +199,14 @@ class TestWarren:
             prefetch_count=self.config.prefetch_count
         )
         mock_declare.assert_called_once_with(subscription)
+
+    def test_setup_consumer_no_channel(self):
+        """Test _setup_consumer when channel is None."""
+        # Force channel to be None
+        self.warren._channel = None
+
+        with pytest.raises(WarrenNotConnected, match="Channel not available"):
+            self.warren._setup_consumer()
 
     def test_declare_consumer_resources(self):
         """Test _declare_consumer_resources method."""
@@ -218,6 +234,20 @@ class TestWarren:
             queue=expected_queue_name,
             routing_key="test.topic",
         )
+
+    def test_declare_consumer_resources_no_channel(self):
+        """Test _declare_consumer_resources when channel is None."""
+        # Force channel to be None
+        self.warren._channel = None
+
+        subscription = Subscription(
+            exchange_name="test_exchange",
+            exchange_type=ExchangeType.topic,
+            topic="test.topic",
+        )
+
+        with pytest.raises(WarrenNotConnected, match="Channel not available"):
+            self.warren._declare_consumer_resources(subscription)
 
     def test_on_connection_error(self):
         """Test on_connection_error callback."""
@@ -441,3 +471,79 @@ class TestWarren:
     def test_disconnect_no_connection(self):
         """Test disconnect when no connection exists."""
         self.warren.disconnect()  # Should not raise an exception
+
+    def test_on_message_callback_specific_exceptions(self):
+        """Test _on_message method with specific exception types."""
+        mock_channel = Mock()
+        mock_method = Mock()
+        mock_method.delivery_tag = "test_tag"
+        mock_method.exchange = "test_exchange"
+        mock_method.routing_key = "test.key"
+        mock_properties = Mock()
+        mock_body = b'{"test": "data"}'
+
+        # Set up consumer callback that raises ValueError
+        def callback_with_value_error(channel, method, properties, body):
+            raise ValueError("Test value error")
+
+        self.warren._consumer_callback = callback_with_value_error
+
+        # Test ValueError handling
+        self.warren._on_message(mock_channel, mock_method, mock_properties, mock_body)
+
+        # Should call basic_nack with requeue=True
+        mock_channel.basic_nack.assert_called_once_with(
+            delivery_tag="test_tag", requeue=True
+        )
+
+        # Reset mock
+        mock_channel.reset_mock()
+
+        # Test TypeError handling
+        def callback_with_type_error(channel, method, properties, body):
+            raise TypeError("Test type error")
+
+        self.warren._consumer_callback = callback_with_type_error
+        self.warren._on_message(mock_channel, mock_method, mock_properties, mock_body)
+
+        mock_channel.basic_nack.assert_called_once_with(
+            delivery_tag="test_tag", requeue=True
+        )
+
+        # Reset mock
+        mock_channel.reset_mock()
+
+        # Test KeyError handling
+        def callback_with_key_error(channel, method, properties, body):
+            raise KeyError("Test key error")
+
+        self.warren._consumer_callback = callback_with_key_error
+        self.warren._on_message(mock_channel, mock_method, mock_properties, mock_body)
+
+        mock_channel.basic_nack.assert_called_once_with(
+            delivery_tag="test_tag", requeue=True
+        )
+
+    def test_on_message_unexpected_exception(self):
+        """Test _on_message method with unexpected exception type."""
+        mock_channel = Mock()
+        mock_method = Mock()
+        mock_method.delivery_tag = "test_tag"
+        mock_method.exchange = "test_exchange"
+        mock_method.routing_key = "test.key"
+        mock_properties = Mock()
+        mock_body = b'{"test": "data"}'
+
+        # Set up consumer callback that raises unexpected exception
+        def callback_with_unexpected_error(channel, method, properties, body):
+            raise RuntimeError("Unexpected runtime error")
+
+        self.warren._consumer_callback = callback_with_unexpected_error
+
+        # Test unexpected exception handling
+        self.warren._on_message(mock_channel, mock_method, mock_properties, mock_body)
+
+        # Should call basic_nack with requeue=True
+        mock_channel.basic_nack.assert_called_once_with(
+            delivery_tag="test_tag", requeue=True
+        )
