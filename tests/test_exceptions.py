@@ -8,7 +8,9 @@ from bunnystream.exceptions import (
     RabbitHostError,
     RabbitVHostError,
     RabbitCredentialsError,
-    ExcangeNameError
+    ExcangeNameError,
+    WarrenNotConfigured,
+    BunnyStreamError,
 )
 
 
@@ -80,13 +82,27 @@ class TestExceptions:
             raise ExcangeNameError(custom_message)
         assert custom_message in str(exc_info.value)
 
+    def test_warren_not_configured_default_message(self):
+        """Test ExcangeNameError with default message."""
+        with pytest.raises(WarrenNotConfigured) as exc_info:
+            raise WarrenNotConfigured()
+        assert "Warren instance is not configured." in str(exc_info.value)
+
+    def test_warren_not_configured_custom_message(self):
+        """Test ExcangeNameError with custom message."""
+        custom_message = "Custom exchange name error message"
+        with pytest.raises(WarrenNotConfigured) as exc_info:
+            raise WarrenNotConfigured(custom_message)
+        assert custom_message in str(exc_info.value)
+
     def test_exceptions_inheritance(self):
         """Test that all custom exceptions inherit from Exception."""
-        assert issubclass(RabbitPortError, Exception)
-        assert issubclass(RabbitHostError, Exception)
-        assert issubclass(RabbitVHostError, Exception)
-        assert issubclass(RabbitCredentialsError, Exception)
-        assert issubclass(ExcangeNameError, Exception)
+        assert issubclass(RabbitPortError, BunnyStreamError)
+        assert issubclass(RabbitHostError, BunnyStreamError)
+        assert issubclass(RabbitVHostError, BunnyStreamError)
+        assert issubclass(RabbitCredentialsError, BunnyStreamError)
+        assert issubclass(ExcangeNameError, BunnyStreamError)
+        assert issubclass(WarrenNotConfigured, BunnyStreamError)
 
     def test_exceptions_are_different_types(self):
         """Test that all exceptions are different types."""
@@ -95,7 +111,8 @@ class TestExceptions:
             RabbitHostError(),
             RabbitVHostError(),
             RabbitCredentialsError(),
-            ExcangeNameError()
+            ExcangeNameError(),
+            WarrenNotConfigured()
         ]
         
         # Check that no two exceptions are of the same type

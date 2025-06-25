@@ -5,12 +5,13 @@ This module provides the Warren class which handles RabbitMQ connection
 parameters, URL parsing, and configuration management.
 """
 
-from typing import Optional, Union
+from typing import Callable, Optional, Union
 
 import pika
+from pika.exchange_type import ExchangeType
 
 from bunnystream.config import BunnyStreamConfig
-from bunnystream.exceptions import BunnyStreamConfigurationError
+from bunnystream.exceptions import BunnyStreamConfigurationError, WarrenNotConnected
 from bunnystream.logger import get_bunny_logger
 
 
@@ -32,6 +33,9 @@ class Warren:
         """
         self._rabbit_connection = None
         self._config = config
+        self._channel = None
+        self._consumer_tag = None
+        self._consumer_callback: Optional[Callable] = None
 
         # Initialize logger for this instance
         self.logger = get_bunny_logger("warren")
@@ -166,10 +170,10 @@ class Warren:
             connection (pika.SelectConnection): The opened RabbitMQ connection.
         """
         self.logger.info("RabbitMQ connection opened successfully.")
-        # Example: open a channel when the connection opens
+        # Open a channel when the connection opens
         connection.channel(on_open_callback=self.on_channel_open)
 
-    def on_channel_open(self, channel: pika.channel.Channel):
+    def on_channel_open(self, channel) -> None:
         """
         Callback when the RabbitMQ channel is opened.
 
@@ -177,9 +181,73 @@ class Warren:
             channel: The opened RabbitMQ channel.
         """
         self.logger.info("RabbitMQ channel opened successfully.")
+        self._channel = channel
+
+        # Set up channel based on mode
+        if self.config.mode == "consumer":
+            self._setup_consumer()
+        elif self.config.mode == "producer":
+            self._setup_producer()
+
+    def _setup_producer(self) -> None:
+        """Setup channel for producer mode."""
+        if self._channel is None:
+            raise WarrenNotConnected("Channel not available")
+
+        # Declare exchanges based on subscriptions
+        for subscription in self.config.subscriptions:
+            self._channel.exchange_declare(
+                exchange=subscription.exchange_name,
+                exchange_type=subscription.exchange_type,
+                durable=True,
+            )
+        self.logger.debug("Producer setup completed")
+
+    def _setup_consumer(self) -> None:
+        """Setup channel for consumer mode."""
+        if self._channel is None:
+            raise WarrenNotConnected("Channel not available")
+
+        self._channel.basic_qos(prefetch_count=self.config.prefetch_count)
+
+        # Declare exchanges and queues based on subscriptions
+        for subscription in self.config.subscriptions:
+            self._declare_consumer_resources(subscription)
+
+        self.logger.debug("Consumer setup completed")
+
+    def _declare_consumer_resources(self, subscription) -> None:
+        """Declare exchange, queue, and bindings for a subscription."""
+        if self._channel is None:
+            raise WarrenNotConnected("Channel not available")
+
+        # Declare exchange
+        self._channel.exchange_declare(
+            exchange=subscription.exchange_name,
+            exchange_type=subscription.exchange_type,
+            durable=True,
+        )
+
+        # Declare queue
+        queue_name = f"{subscription.exchange_name}.{subscription.topic}"
+        self._channel.queue_declare(queue=queue_name, durable=True)
+
+        # Bind queue to exchange
+        self._channel.queue_bind(
+            exchange=subscription.exchange_name,
+            queue=queue_name,
+            routing_key=subscription.topic,
+        )
+
+        self.logger.debug(
+            "Declared resources for exchange=%s, queue=%s, topic=%s",
+            subscription.exchange_name,
+            queue_name,
+            subscription.topic,
+        )
 
     def on_connection_error(
-        self, connection: pika.SelectConnection, error: Exception
+        self, _connection: pika.SelectConnection, error: Exception
     ) -> None:
         """
         Callback when there is an error opening the RabbitMQ connection.
@@ -192,7 +260,7 @@ class Warren:
         self._rabbit_connection = None
 
     def on_connection_closed(
-        self, connection: pika.SelectConnection, reason: Union[str, None]
+        self, _connection: pika.SelectConnection, reason: Union[str, None]
     ) -> None:
         """
         Callback when the RabbitMQ connection is closed.
@@ -203,3 +271,124 @@ class Warren:
         """
         self.logger.warning("RabbitMQ connection closed: %s", reason)
         self._rabbit_connection = None
+
+    def publish(
+        self,
+        message: str,
+        exchange: str,
+        topic: str,
+        exchange_type: ExchangeType = ExchangeType.topic,
+    ) -> None:
+        """
+        Publishes a message to the specified exchange and topic.
+
+        Args:
+            message (str): The message to publish.
+            exchange (str): The name of the exchange to publish to.
+            topic (str): The routing key for the message.
+            exchange_type (ExchangeType): The type of the exchange.
+
+        Raises:
+            WarrenNotConnected: If the channel is not available for publishing.
+        """
+        if self._channel is None:
+            raise WarrenNotConnected("Cannot publish, channel not available.")
+
+        self.logger.debug(
+            "Publishing message to exchange '%s' with topic '%s'", exchange, topic
+        )
+        self._channel.exchange_declare(
+            exchange=exchange, exchange_type=exchange_type, durable=True
+        )
+
+        self._channel.basic_publish(
+            exchange=exchange,
+            routing_key=topic,
+            body=message,
+            properties=pika.BasicProperties(
+                content_type="application/json", delivery_mode=2
+            ),
+        )
+
+    def start_consuming(self, message_callback: Callable) -> None:
+        """
+        Start consuming messages from queues.
+
+        Args:
+            message_callback (Callable): Function to call when a message is received.
+                Should accept (channel, method, properties, body) arguments.
+
+        Raises:
+            WarrenNotConnected: If not connected to RabbitMQ.
+            BunnyStreamConfigurationError: If not in consumer mode.
+        """
+        if self._channel is None:
+            raise WarrenNotConnected("Cannot start consuming, channel not available.")
+
+        if self.config.mode != "consumer":
+            raise BunnyStreamConfigurationError(
+                "Warren must be in 'consumer' mode to start consuming messages."
+            )
+
+        self._consumer_callback = message_callback
+
+        # Start consuming from all subscription queues
+        for subscription in self.config.subscriptions:
+            queue_name = f"{subscription.exchange_name}.{subscription.topic}"
+            self._consumer_tag = self._channel.basic_consume(
+                queue=queue_name, on_message_callback=self._on_message, auto_ack=False
+            )
+            self.logger.info(
+                "Started consuming from queue '%s' with consumer tag '%s'",
+                queue_name,
+                self._consumer_tag,
+            )
+
+    def _on_message(self, channel, method, properties, body) -> None:
+        """
+        Internal message handler that wraps the user callback.
+
+        Args:
+            channel: The channel object.
+            method: Delivery method.
+            properties: Message properties.
+            body: The message body.
+        """
+        try:
+            if self._consumer_callback:
+                self._consumer_callback(channel, method, properties, body)
+            # Acknowledge the message
+            channel.basic_ack(delivery_tag=method.delivery_tag)
+        except (ValueError, TypeError, KeyError) as e:
+            self.logger.error("Error processing message: %s", str(e))
+            # Reject the message and requeue it
+            channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+        except Exception as e:  # pylint: disable=broad-except
+            self.logger.error("Unexpected error processing message: %s", str(e))
+            # Reject the message and requeue it
+            channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+
+    def stop_consuming(self) -> None:
+        """Stop consuming messages."""
+        if self._channel and self._consumer_tag:
+            self._channel.basic_cancel(self._consumer_tag)
+            self._consumer_tag = None
+            self.logger.info("Stopped consuming messages")
+
+    def start_io_loop(self) -> None:
+        """Start the IO loop for async operations."""
+        if self._rabbit_connection:
+            self.logger.info("Starting IO loop")
+            self._rabbit_connection.ioloop.start()
+
+    def stop_io_loop(self) -> None:
+        """Stop the IO loop."""
+        if self._rabbit_connection:
+            self.logger.info("Stopping IO loop")
+            self._rabbit_connection.ioloop.stop()
+
+    def disconnect(self) -> None:
+        """Disconnect from RabbitMQ."""
+        if self._rabbit_connection and not self._rabbit_connection.is_closed:
+            self.logger.info("Disconnecting from RabbitMQ")
+            self._rabbit_connection.close()

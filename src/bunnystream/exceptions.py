@@ -8,7 +8,14 @@ related to RabbitMQ configuration and connection parameters.
 from typing import Union
 
 
-class RabbitPortError(Exception):
+class BunnyStreamError(Exception):
+    """Base class for all BunnyStream exceptions."""
+
+    def __init__(self, message: str = "An error occurred in BunnyStream."):
+        super().__init__(message)
+
+
+class RabbitPortError(BunnyStreamError):
     """Exception raised for errors in the RabbitMQ port configuration."""
 
     def __init__(
@@ -20,42 +27,42 @@ class RabbitPortError(Exception):
         super().__init__(message)
 
 
-class RabbitHostError(Exception):
+class RabbitHostError(BunnyStreamError):
     """Exception raised for errors in the RabbitMQ host configuration."""
 
     def __init__(self, message: str = "Rabbit host cannot be empty."):
         super().__init__(message)
 
 
-class RabbitVHostError(Exception):
+class RabbitVHostError(BunnyStreamError):
     """Exception raised for errors in the RabbitMQ virtual host configuration."""
 
     def __init__(self, message: str = "Rabbit vhost must be a non-empty string."):
         super().__init__(message)
 
 
-class RabbitCredentialsError(Exception):
+class RabbitCredentialsError(BunnyStreamError):
     """Exception raised for errors in the RabbitMQ credentials configuration."""
 
     def __init__(self, message: str = "Rabbit credentials must be a non-empty string."):
         super().__init__(message)
 
 
-class ExcangeNameError(Exception):
+class ExcangeNameError(BunnyStreamError):
     """Exception raised for errors in the RabbitMQ exchange name configuration."""
 
     def __init__(self, message: str = "Exchange name must be a non-empty string."):
         super().__init__(message)
 
 
-class PrefetchCountError(Exception):
+class PrefetchCountError(BunnyStreamError):
     """Exception raised for errors in the RabbitMQ prefetch count configuration."""
 
     def __init__(self, message: str = "Prefetch count must be a positive integer."):
         super().__init__(message)
 
 
-class BunnyStreamModeError(Exception):
+class BunnyStreamModeError(BunnyStreamError):
     """Exception raised for errors in the BunnyStream mode configuration."""
 
     def __init__(
@@ -71,7 +78,7 @@ class BunnyStreamModeError(Exception):
         super().__init__(message)
 
 
-class SSLOptionsError(Exception):
+class SSLOptionsError(BunnyStreamError):
     """Exception raised for errors in the RabbitMQ SSL options configuration."""
 
     def __init__(self):
@@ -82,7 +89,7 @@ class SSLOptionsError(Exception):
         super().__init__(message)
 
 
-class InvalidTCPOptionsError(Exception):
+class InvalidTCPOptionsError(BunnyStreamError):
     """Exception raised for errors in the RabbitMQ TCP options configuration."""
 
     def __init__(
@@ -92,18 +99,32 @@ class InvalidTCPOptionsError(Exception):
         super().__init__(message)
 
 
-class BunnyStreamConfigurationError(Exception):
+class BunnyStreamConfigurationError(BunnyStreamError):
     """Exception raised for errors in the BunnyStream configuration."""
 
     def __init__(self, message: str = "BunnyStream configuration is invalid."):
         super().__init__(message)
 
 
-class SubscriptionsNotSetError(Exception):
+class SubscriptionsNotSetError(BunnyStreamError):
     """Exception raised when subscriptions are not set in BunnyStream."""
 
     def __init__(
         self,
         message: str = "Subscriptions must be set before starting the BunnyStream consumer.",
     ):
+        super().__init__(message)
+
+
+class WarrenNotConfigured(BunnyStreamError):
+    """Exception raised when the Warren instance is not configured."""
+
+    def __init__(self, message: str = "Warren instance is not configured."):
+        super().__init__(message)
+
+
+class WarrenNotConnected(BunnyStreamError):
+    """Exception raised when the Warren instance is not connected."""
+
+    def __init__(self, message: str = "Warren instance is not connected."):
         super().__init__(message)

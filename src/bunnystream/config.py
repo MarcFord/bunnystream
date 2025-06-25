@@ -1209,7 +1209,7 @@ class BunnyStreamConfig:
         if not self._subscription_mappings:
             for subscription in self._subscriptions:
                 self._subscription_mappings[subscription.exchange_name] = {
-                    "topics": subscription.topics,
+                    "topic": subscription.topic,
                     "type": subscription.exchange_type,
                 }
             self.logger.debug("Subscription mappings: %s", self._subscription_mappings)
@@ -1231,14 +1231,14 @@ class BunnyStreamConfig:
             self._subscriptions = []
         self._subscriptions.append(subscription)
         self._subscription_mappings[subscription.exchange_name] = {
-            "topics": subscription.topics,
+            "topic": subscription.topic,
             "type": subscription.exchange_type,
         }
         self.logger.debug(
             "Added subscription: %s type: %s topics: %s",
             subscription.exchange_name,
             subscription.exchange_type,
-            ", ".join(subscription.topics) if subscription.topics else "None",
+            subscription.topic if not subscription.topic.strip() else "None",
         )
 
     def remove_subscription(self, exchange_name: str) -> None:

@@ -374,7 +374,7 @@ class TestBunnyStreamConfigSubscriptions:
         # Check that the default subscription is in the mappings
         assert len(mappings) == 1
         print(mappings["test_exchange"])
-        assert mappings["test_exchange"]["topics"] == []
+        assert mappings["test_exchange"]["topic"] == ""
         assert mappings["test_exchange"]["type"] == "topic"
 
     def test_add_subscription(self):
