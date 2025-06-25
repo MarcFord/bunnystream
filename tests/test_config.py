@@ -68,9 +68,7 @@ class TestBunnyStreamConfigInitialization:
 
     def test_initialization_with_partial_parameters(self):
         """Test BunnyStreamConfig with some parameters provided."""
-        config = BunnyStreamConfig(
-            mode="producer", rabbit_host="myhost.com", rabbit_port=6672
-        )
+        config = BunnyStreamConfig(mode="producer", rabbit_host="myhost.com", rabbit_port=6672)
 
         assert config.mode == "producer"
         assert config.rabbit_host == "myhost.com"
@@ -130,9 +128,7 @@ class TestBunnyStreamConfigRabbitProperties:
         config.rabbit_host = "newhost.com"
         assert config.rabbit_host == "newhost.com"
 
-    @pytest.mark.parametrize(
-        "invalid_host", [None, "", "   ", 10, "amqp://example.com"]
-    )
+    @pytest.mark.parametrize("invalid_host", [None, "", "   ", 10, "amqp://example.com"])
     def test_rabbit_host_setter_with_invalid_values(self, invalid_host):
         """Test rabbit_host setter with invalid values."""
         config = BunnyStreamConfig(mode="producer")
@@ -269,9 +265,7 @@ class TestBunnyStreamConfigEnvironmentVariables:
         assert config.rabbit_user == "user"
         assert config.rabbit_pass == "pass"
 
-    @patch.dict(
-        os.environ, {"RABBITMQ_URL": "amqps://user:pass@secure.host:5671/secure_vhost"}
-    )
+    @patch.dict(os.environ, {"RABBITMQ_URL": "amqps://user:pass@secure.host:5671/secure_vhost"})
     def test_amqps_scheme_parsing(self):
         """Test parsing of AMQPS scheme in RABBITMQ_URL."""
         config = BunnyStreamConfig(mode="producer")
@@ -356,9 +350,7 @@ class TestBunnyStreamConfigSubscriptions:
         config = BunnyStreamConfig(mode="consumer")
         config._subscriptions = None
 
-        with pytest.raises(
-            SubscriptionsNotSetError, match="Subscriptions have not been set."
-        ):
+        with pytest.raises(SubscriptionsNotSetError, match="Subscriptions have not been set."):
             _ = config.subscription_mappings
 
     def test_subscription_mappings_returns_dict_correctly(self):
@@ -390,9 +382,7 @@ class TestBunnyStreamConfigSubscriptions:
         exchange_names = [sub.exchange_name for sub in subscriptions]
         assert "custom_exchange" in exchange_names
         # Find the custom subscription
-        custom_sub = next(
-            sub for sub in subscriptions if sub.exchange_name == "custom_exchange"
-        )
+        custom_sub = next(sub for sub in subscriptions if sub.exchange_name == "custom_exchange")
         assert custom_sub == new_subscription
         assert "custom_exchange" in config.subscription_mappings
         assert isinstance(config.subscription_mappings["custom_exchange"], dict)
@@ -414,9 +404,7 @@ class TestBunnyStreamConfigSubscriptions:
         config = BunnyStreamConfig(mode="consumer")
 
         # Attempt to remove a non-existent subscription
-        with pytest.raises(
-            ValueError, match="Subscription for exchange 'nonexistent' not found"
-        ):
+        with pytest.raises(ValueError, match="Subscription for exchange 'nonexistent' not found"):
             config.remove_subscription("nonexistent")
 
     def test_remove_subscription_with_no_subscriptions(self):
@@ -425,9 +413,7 @@ class TestBunnyStreamConfigSubscriptions:
 
         # Remove the default subscription
         config._subscriptions = None
-        with pytest.raises(
-            SubscriptionsNotSetError, match="Subscriptions have not been set."
-        ):
+        with pytest.raises(SubscriptionsNotSetError, match="Subscriptions have not been set."):
             config.remove_subscription("test_exchange")
 
     def test_add_subscription_works_when_subscriptions_are_none(self):
@@ -442,9 +428,7 @@ class TestBunnyStreamConfigSubscriptions:
         """Test adding a subscription with an invalid type."""
         config = BunnyStreamConfig(mode="consumer")
 
-        with pytest.raises(
-            ValueError, match="Subscription must be an instance of Subscription."
-        ):
+        with pytest.raises(ValueError, match="Subscription must be an instance of Subscription."):
             config.add_subscription("not_a_subscription")
 
     def test_subscriptions_raises_error_when_none(self):
@@ -452,9 +436,7 @@ class TestBunnyStreamConfigSubscriptions:
         config = BunnyStreamConfig(mode="consumer")
         config._subscriptions = None
 
-        with pytest.raises(
-            SubscriptionsNotSetError, match="Subscriptions have not been set."
-        ):
+        with pytest.raises(SubscriptionsNotSetError, match="Subscriptions have not been set."):
             _ = config.subscriptions
 
 
@@ -732,18 +714,14 @@ class TestBunnyStreamConfigAdvancedProperties:
         """Test socket_timeout setter raises error on invalid type."""
         config = BunnyStreamConfig(mode="producer")
 
-        with pytest.raises(
-            ValueError, match="Socket timeout must be a float or an integer."
-        ):
+        with pytest.raises(ValueError, match="Socket timeout must be a float or an integer."):
             config.socket_timeout = "not_a_number"
 
     def test_socket_timeout_setter_with_invalid_value(self):
         """Test socket_timeout setter raises error on invalid value."""
         config = BunnyStreamConfig(mode="producer")
 
-        with pytest.raises(
-            ValueError, match="Socket timeout must be a positive float."
-        ):
+        with pytest.raises(ValueError, match="Socket timeout must be a positive float."):
             config.socket_timeout = 0
 
     def test_socket_timeout_setter_with_valid_value(self):
@@ -772,18 +750,14 @@ class TestBunnyStreamConfigAdvancedProperties:
         """Test retry_delay setter raises error on invalid type."""
         config = BunnyStreamConfig(mode="producer")
 
-        with pytest.raises(
-            ValueError, match="Retry delay must be a float or an integer."
-        ):
+        with pytest.raises(ValueError, match="Retry delay must be a float or an integer."):
             config.retry_delay = "not_a_number"
 
     def test_retry_delay_setter_with_invalid_value(self):
         """Test retry_delay setter raises error on invalid value."""
         config = BunnyStreamConfig(mode="producer")
 
-        with pytest.raises(
-            ValueError, match="Retry delay must be a non-negative float."
-        ):
+        with pytest.raises(ValueError, match="Retry delay must be a non-negative float."):
             config.retry_delay = -1.0
 
     def test_retry_delay_setter_with_valid_value(self):
@@ -824,9 +798,7 @@ class TestBunnyStreamConfigAdvancedProperties:
         """Test stack_timeout setter raises error on invalid type."""
         config = BunnyStreamConfig(mode="producer")
 
-        with pytest.raises(
-            ValueError, match="Stack timeout must be a float or an integer."
-        ):
+        with pytest.raises(ValueError, match="Stack timeout must be a float or an integer."):
             config.stack_timeout = "not_a_number"
 
     def test_stack_timeout_setter_with_invalid_value(self):
@@ -893,9 +865,7 @@ class TestBunnyStreamConfigAdvancedProperties:
         """Test connection_attempts setter raises error on invalid value."""
         config = BunnyStreamConfig(mode="producer")
 
-        with pytest.raises(
-            ValueError, match="Connection attempts must be a greater than 1."
-        ):
+        with pytest.raises(ValueError, match="Connection attempts must be a greater than 1."):
             config.connection_attempts = -1
 
     @patch.dict(os.environ, {"RABBITMQ_CONNECTION_ATTEMPTS": "2"})
@@ -1032,9 +1002,7 @@ class TestBunnyStreamConfigAdvancedProperties:
         """Test heartbeat setter raises error on invalid integer."""
         config = BunnyStreamConfig(mode="producer")
 
-        with pytest.raises(
-            ValueError, match="Heartbeat must be a non-negative integer."
-        ):
+        with pytest.raises(ValueError, match="Heartbeat must be a non-negative integer."):
             config.heartbeat = -1
 
     def test_heartbeat_setter_with_invalid_type(self):
@@ -1184,9 +1152,7 @@ class TestBunnyStreamConfigIntegration:
         assert config.exchange_name == "updated_exchange"
         assert config.rabbit_port == 5674
 
-    @patch.dict(
-        os.environ, {"RABBITMQ_URL": "amqp://env_user:env_pass@env.host:5999/env_vhost"}
-    )
+    @patch.dict(os.environ, {"RABBITMQ_URL": "amqp://env_user:env_pass@env.host:5999/env_vhost"})
     def test_environment_and_parameter_interaction(self):
         """Test interaction between environment variables and constructor parameters."""
         config = BunnyStreamConfig(
@@ -1253,9 +1219,7 @@ class TestBunnyStreamConfigEdgeCases:
 
     def test_url_property_with_empty_password(self):
         """Test URL property when password is empty (should reject empty password)."""
-        with pytest.raises(
-            RabbitCredentialsError, match="Rabbit password cannot be empty"
-        ):
+        with pytest.raises(RabbitCredentialsError, match="Rabbit password cannot be empty"):
             BunnyStreamConfig(
                 mode="consumer",
                 rabbit_host="test.host",
@@ -1443,9 +1407,7 @@ class TestBunnyStreamConfigValidateTCPOptions:
     def test_tcp_options_invalid_type(self):
         """Test TCP options with invalid type."""
         config = BunnyStreamConfig(mode="producer")
-        with pytest.raises(
-            InvalidTCPOptionsError, match="CP options must be a dictionary."
-        ):
+        with pytest.raises(InvalidTCPOptionsError, match="CP options must be a dictionary."):
             config.tcp_options = "invalid_type"
 
     def test_tcp_options_invalid_key(self):

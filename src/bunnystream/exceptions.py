@@ -115,9 +115,7 @@ class SubscriptionsNotSetError(BunnyStreamError):
 
     def __init__(
         self,
-        message: str = (
-            "Subscriptions must be set before starting the BunnyStream consumer."
-        ),
+        message: str = ("Subscriptions must be set before starting the BunnyStream consumer."),
     ):
         super().__init__(message)
 

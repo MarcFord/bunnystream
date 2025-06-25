@@ -96,6 +96,7 @@ include = '\.pyi?$'
 extend-exclude = '''
 /(
   # directories
+  \tests
   \.eggs
   | \.git
   | \.hg

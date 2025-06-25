@@ -22,9 +22,9 @@ class TestExceptions:
         """Test RabbitPortError with default message."""
         with pytest.raises(RabbitPortError) as exc_info:
             raise RabbitPortError()
-        assert (
-            "Rabbit port must be a positive integer or a string that can be converted"
-        ) in str(exc_info.value)
+        assert ("Rabbit port must be a positive integer or a string that can be converted") in str(
+            exc_info.value
+        )
 
     def test_rabbit_port_error_custom_message(self):
         """Test RabbitPortError with custom message."""

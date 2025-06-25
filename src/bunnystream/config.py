@@ -195,8 +195,7 @@ class BunnyStreamConfig:
             # Validate scheme
             if parsed.scheme not in ["amqp", "amqps"]:
                 raise ValueError(
-                    f"Invalid URL scheme '{parsed.scheme}'. "
-                    "Expected 'amqp' or 'amqps'."
+                    f"Invalid URL scheme '{parsed.scheme}'. " "Expected 'amqp' or 'amqps'."
                 )
 
             # Extract components
@@ -534,9 +533,7 @@ class BunnyStreamConfig:
             - Debug: The current (masked) password value.
         """
         if self._rabbit_pass is None:
-            self.logger.info(
-                "Rabbit password is not set, using default password 'guest'."
-            )
+            self.logger.info("Rabbit password is not set, using default password 'guest'.")
             self._rabbit_pass = DEFAULT_PASS
         if not isinstance(self._rabbit_pass, str):
             raise RabbitCredentialsError("Rabbit password must be a string.")
@@ -655,13 +652,9 @@ class BunnyStreamConfig:
         if not isinstance(value, int):
             raise ValueError("Frame max must be an integer.")
         if value <= FRAME_MIN_SIZE:
-            raise ValueError(
-                f"Min AMQP 0.9.1 Frame Size is {FRAME_MIN_SIZE}, but got {value!r}"
-            )
+            raise ValueError(f"Min AMQP 0.9.1 Frame Size is {FRAME_MIN_SIZE}, but got {value!r}")
         if value > FRAME_MAX_SIZE:
-            raise ValueError(
-                f"Max AMQP 0.9.1 Frame Size is {FRAME_MAX_SIZE}, but got {value!r}"
-            )
+            raise ValueError(f"Max AMQP 0.9.1 Frame Size is {FRAME_MAX_SIZE}, but got {value!r}")
         self.logger.debug("Setting frame max to: %s", value)
         self._frame_max = value
 
@@ -692,9 +685,7 @@ class BunnyStreamConfig:
                     DEFAULT_HEARTBEAT_TIMEOUT,
                 )
                 return DEFAULT_HEARTBEAT_TIMEOUT
-        self.logger.debug(
-            "Using default heartbeat timeout: %s", DEFAULT_HEARTBEAT_TIMEOUT
-        )
+        self.logger.debug("Using default heartbeat timeout: %s", DEFAULT_HEARTBEAT_TIMEOUT)
         return DEFAULT_HEARTBEAT_TIMEOUT
 
     @heartbeat.setter
@@ -772,15 +763,11 @@ class BunnyStreamConfig:
             ValueError: If the provided value is not a non-negative float.
         """
         if value is None:
-            self.logger.debug(
-                "Setting blocked connection timeout to None (no timeout)."
-            )
+            self.logger.debug("Setting blocked connection timeout to None (no timeout).")
             self._blocked_connection_timeout = None
             return
         if not isinstance(value, (int, float)):
-            raise ValueError(
-                "Blocked connection timeout must be a float or an integer."
-            )
+            raise ValueError("Blocked connection timeout must be a float or an integer.")
         if value < 0:
             raise ValueError("Blocked connection timeout must be a non-negative float.")
         self.logger.debug("Setting blocked connection timeout to: %s", value)
@@ -798,9 +785,7 @@ class BunnyStreamConfig:
             int: The number of connection attempts.
         """
         if self._connection_attempts is not None:
-            self.logger.debug(
-                "Using internal connection attempts: %s", self._connection_attempts
-            )
+            self.logger.debug("Using internal connection attempts: %s", self._connection_attempts)
             return self._connection_attempts
         # Check environment variable for connection attempts
         connection_attempts = os.getenv("RABBITMQ_CONNECTION_ATTEMPTS")
@@ -815,9 +800,7 @@ class BunnyStreamConfig:
                     DEFAULT_CONNECTION_ATTEMPTS,
                 )
                 return DEFAULT_CONNECTION_ATTEMPTS
-        self.logger.debug(
-            "Using default connection attempts: %s", DEFAULT_CONNECTION_ATTEMPTS
-        )
+        self.logger.debug("Using default connection attempts: %s", DEFAULT_CONNECTION_ATTEMPTS)
         return DEFAULT_CONNECTION_ATTEMPTS
 
     @connection_attempts.setter
@@ -1006,9 +989,7 @@ class BunnyStreamConfig:
                 self.tcp_options = tcp_options  # Use setter to validate
                 return tcp_options
             except json.JSONDecodeError as e:
-                self.logger.error(
-                    "Invalid RABBITMQ_TCP_OPTIONS JSON format: %s", str(e)
-                )
+                self.logger.error("Invalid RABBITMQ_TCP_OPTIONS JSON format: %s", str(e))
                 return None
             except InvalidTCPOptionsError as e:
                 self.logger.error("Invalid TCP options: %s", str(e))
@@ -1180,9 +1161,7 @@ class BunnyStreamConfig:
             self.locale = locale  # Use setter to validate
             self.logger.debug("Using RABBITMQ_LOCALE from environment: %s", locale)
         except ValueError:
-            self.logger.error(
-                "Invalid RABBITMQ_LOCALE value, using default: %s", DEFAULT_LOCALE
-            )
+            self.logger.error("Invalid RABBITMQ_LOCALE value, using default: %s", DEFAULT_LOCALE)
             locale = DEFAULT_LOCALE
         self.logger.debug("Using RabbitMQ locale: %s", locale)
         return locale
@@ -1285,9 +1264,7 @@ class BunnyStreamConfig:
             raise SubscriptionsNotSetError("Subscriptions have not been set.")
         for subscription in self._subscriptions:
             if subscription.exchange_name == exchange_name:
-                self.logger.debug(
-                    "Removing subscription for exchange: %s", exchange_name
-                )
+                self.logger.debug("Removing subscription for exchange: %s", exchange_name)
                 self._subscriptions.remove(subscription)
                 self._subscription_mappings.pop(exchange_name, None)
                 return
@@ -1317,7 +1294,6 @@ class BunnyStreamConfig:
         if invalid_keys:
             self.logger.error("Invalid TCP options provided: %s", invalid_keys)
             raise InvalidTCPOptionsError(
-                f"Invalid TCP options: {invalid_keys}. "
-                f"Valid options are: {valid_keys}"
+                f"Invalid TCP options: {invalid_keys}. " f"Valid options are: {valid_keys}"
             )
         self.logger.debug("TCP options validated successfully: %s", options)
