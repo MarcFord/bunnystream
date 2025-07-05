@@ -170,7 +170,9 @@ class BaseEvent:
         return self.data[item]
 
     def __setitem__(self, key: Any, value: Any) -> None:
-        if value is not None and not isinstance(value, (list, dict, tuple, str, float, int, bool)):
+        if value is not None and not isinstance(
+            value, (list, dict, tuple, str, float, int, bool)
+        ):
             value = str(value)
 
         self.data[key] = value
@@ -185,7 +187,9 @@ class BaseEvent:
         try:
             self["_meta_"] = {
                 "hostname": str(platform.node()),
-                "timestamp": str(datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")),
+                "timestamp": str(
+                    datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                ),
                 "host_ip_address": str(self._get_host_ip_address()),
                 "host_os_in": self._get_os_info(),
                 "bunnystream_version": bunnystream_version,

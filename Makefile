@@ -1,6 +1,6 @@
 # Makefile for bunnystream package
 
-.PHONY: help test lint build release-patch release-minor release-major
+.PHONY: help test lint build release-patch release-minor release-major tag
 
 # Default target
 help:
@@ -11,6 +11,7 @@ help:
 	@echo "  release-patch  - Create a patch release (x.y.Z)"
 	@echo "  release-minor  - Create a minor release (x.Y.0)"
 	@echo "  release-major  - Create a major release (X.0.0)"
+	@echo "  tag            - Create and push a git tag (usage: make tag version=1.0.0)"
 	@echo "  clean          - Clean build artifacts"
 
 # Test the package
@@ -50,6 +51,18 @@ release-minor:
 release-major:
 	@echo "Creating major release..."
 	python scripts/bump_version.py major
+
+# Create and push a git tag
+tag:
+ifndef version
+	@echo "❌ Error: version argument is required"
+	@echo "Usage: make tag version=1.0.0"
+	@exit 1
+endif
+	@echo "Creating and pushing tag v$(version)..."
+	git tag v$(version)
+	git push origin v$(version)
+	@echo "✅ Tag v$(version) created and pushed successfully!"
 
 # Install development dependencies
 install-dev:

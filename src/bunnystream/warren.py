@@ -196,13 +196,9 @@ class Warren:
         if self._channel is None:
             raise WarrenNotConnected("Channel not available")
 
-        # Declare exchanges based on subscriptions
+        # Declare exchanges and queues based on subscriptions
         for subscription in self.config.subscriptions:
-            self._channel.exchange_declare(
-                exchange=subscription.exchange_name,
-                exchange_type=subscription.exchange_type,
-                durable=True,
-            )
+            self._declare_consumer_resources(subscription)
         self.logger.debug("Producer setup completed")
 
     def _setup_consumer(self) -> None:
@@ -230,9 +226,11 @@ class Warren:
             durable=True,
         )
 
-        # Declare queue
+        # Declare queue with quorum type
         queue_name = f"{subscription.exchange_name}.{subscription.topic}"
-        self._channel.queue_declare(queue=queue_name, durable=True)
+        self._channel.queue_declare(
+            queue=queue_name, durable=True, arguments={"x-queue-type": "quorum"}
+        )
 
         # Bind queue to exchange
         self._channel.queue_bind(
@@ -248,7 +246,9 @@ class Warren:
             subscription.topic,
         )
 
-    def on_connection_error(self, _connection: pika.SelectConnection, error: Exception) -> None:
+    def on_connection_error(
+        self, _connection: pika.SelectConnection, error: Exception
+    ) -> None:
         """
         Callback when there is an error opening the RabbitMQ connection.
 
@@ -294,14 +294,20 @@ class Warren:
         if self._channel is None:
             raise WarrenNotConnected("Cannot publish, channel not available.")
 
-        self.logger.debug("Publishing message to exchange '%s' with topic '%s'", exchange, topic)
-        self._channel.exchange_declare(exchange=exchange, exchange_type=exchange_type, durable=True)
+        self.logger.debug(
+            "Publishing message to exchange '%s' with topic '%s'", exchange, topic
+        )
+        self._channel.exchange_declare(
+            exchange=exchange, exchange_type=exchange_type, durable=True
+        )
 
         self._channel.basic_publish(
             exchange=exchange,
             routing_key=topic,
             body=message,
-            properties=pika.BasicProperties(content_type="application/json", delivery_mode=2),
+            properties=pika.BasicProperties(
+                content_type="application/json", delivery_mode=2
+            ),
         )
 
     def start_consuming(self, message_callback: Callable) -> None:
@@ -338,7 +344,9 @@ class Warren:
                 self._consumer_tag,
             )
 
-    def _on_message(self, channel: Any, method: Any, properties: Any, body: Any) -> None:
+    def _on_message(
+        self, channel: Any, method: Any, properties: Any, body: Any
+    ) -> None:
         """
         Internal message handler that wraps the user callback.
 
