@@ -116,6 +116,87 @@ class TestWarren:
 
         mock_select_connection.assert_not_called()
 
+    def test_is_connected_no_connection(self):
+        """Test is_connected property when no connection exists."""
+        self.warren._rabbit_connection = None
+        assert self.warren.is_connected is False
+
+    def test_is_connected_with_closed_connection(self):
+        """Test is_connected property with closed connection."""
+        mock_connection = Mock()
+        mock_connection.is_closed = True
+        self.warren._rabbit_connection = mock_connection
+        assert self.warren.is_connected is False
+
+    def test_is_connected_with_open_connection(self):
+        """Test is_connected property with open connection."""
+        mock_connection = Mock()
+        mock_connection.is_closed = False
+        self.warren._rabbit_connection = mock_connection
+        assert self.warren.is_connected is True
+
+    def test_connection_status_not_initialized(self):
+        """Test connection_status property when not initialized."""
+        self.warren._rabbit_connection = None
+        assert self.warren.connection_status == "not_initialized"
+
+    def test_connection_status_disconnected(self):
+        """Test connection_status property when disconnected."""
+        mock_connection = Mock()
+        mock_connection.is_closed = True
+        self.warren._rabbit_connection = mock_connection
+        assert self.warren.connection_status == "disconnected"
+
+    def test_connection_status_connected(self):
+        """Test connection_status property when connected."""
+        mock_connection = Mock()
+        mock_connection.is_closed = False
+        self.warren._rabbit_connection = mock_connection
+        assert self.warren.connection_status == "connected"
+
+    def test_get_connection_info_no_connection(self):
+        """Test get_connection_info method when no connection exists."""
+        self.warren._rabbit_connection = None
+        self.warren._channel = None
+
+        info = self.warren.get_connection_info()
+
+        expected = {
+            "status": "not_initialized",
+            "is_connected": False,
+            "host": self.config.rabbit_host,
+            "port": self.config.rabbit_port,
+            "virtual_host": self.config.rabbit_vhost,
+            "username": self.config.rabbit_user,
+            "has_channel": False,
+            "mode": self.config.mode,
+            "connection_object": False,
+        }
+        assert info == expected
+
+    def test_get_connection_info_with_connection_and_channel(self):
+        """Test get_connection_info method with connection and channel."""
+        mock_connection = Mock()
+        mock_connection.is_closed = False
+        mock_channel = Mock()
+        self.warren._rabbit_connection = mock_connection
+        self.warren._channel = mock_channel
+
+        info = self.warren.get_connection_info()
+
+        expected = {
+            "status": "connected",
+            "is_connected": True,
+            "host": self.config.rabbit_host,
+            "port": self.config.rabbit_port,
+            "virtual_host": self.config.rabbit_vhost,
+            "username": self.config.rabbit_user,
+            "has_channel": True,
+            "mode": self.config.mode,
+            "connection_object": True,
+        }
+        assert info == expected
+
     def test_on_connection_open_producer_mode(self):
         """Test on_connection_open callback for producer mode."""
         mock_connection = Mock()

@@ -116,6 +116,68 @@ class Warren:
         return self._rabbit_connection
 
     @property
+    def is_connected(self) -> bool:
+        """
+        Returns True if connected to RabbitMQ, False otherwise.
+
+        This property checks if there is an active RabbitMQ connection
+        that is open and not closed.
+
+        Returns:
+            bool: True if connected, False otherwise.
+        """
+        return (
+            self._rabbit_connection is not None
+            and not self._rabbit_connection.is_closed
+        )
+
+    @property
+    def connection_status(self) -> str:
+        """
+        Returns the current connection status as a string.
+
+        This property provides a human-readable description of the current
+        connection state to RabbitMQ.
+
+        Returns:
+            str: Connection status - 'connected', 'disconnected', or 'not_initialized'.
+        """
+        if self._rabbit_connection is None:
+            return "not_initialized"
+        if self._rabbit_connection.is_closed:
+            return "disconnected"
+        return "connected"
+
+    def get_connection_info(self) -> dict:
+        """
+        Returns detailed information about the current RabbitMQ connection.
+
+        This method provides comprehensive information about the connection
+        state, including connection parameters and channel status.
+
+        Returns:
+            dict: Dictionary containing connection information including:
+                - status: Current connection status
+                - host: RabbitMQ host
+                - port: RabbitMQ port
+                - virtual_host: RabbitMQ virtual host
+                - username: RabbitMQ username
+                - has_channel: Whether a channel is available
+                - mode: Current Warren mode (producer/consumer)
+        """
+        return {
+            "status": self.connection_status,
+            "is_connected": self.is_connected,
+            "host": self.config.rabbit_host,
+            "port": self.config.rabbit_port,
+            "virtual_host": self.config.rabbit_vhost,
+            "username": self.config.rabbit_user,
+            "has_channel": self._channel is not None,
+            "mode": self.config.mode,
+            "connection_object": self._rabbit_connection is not None,
+        }
+
+    @property
     def connection_parameters(self) -> pika.ConnectionParameters:
         """
         Constructs and returns the connection parameters for RabbitMQ.
