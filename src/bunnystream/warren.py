@@ -718,6 +718,39 @@ class Warren:
                 self._consumer_tag,
             )
 
+    def _validate_event_class_attributes(
+        self, event_class: type[BaseReceivedEvent]
+    ) -> None:
+        """
+        Validate that an event class has non-empty EXCHANGE and TOPIC attributes.
+
+        Args:
+            event_class: The event class to validate
+
+        Raises:
+            ValueError: If the event class doesn't have valid EXCHANGE and TOPIC attributes
+        """
+        has_exchange = hasattr(event_class, "EXCHANGE")
+        has_topic = hasattr(event_class, "TOPIC")
+
+        if not has_exchange or not has_topic:
+            raise ValueError(
+                f"Event class {event_class.__name__} must have non-empty EXCHANGE and TOPIC"
+            )
+
+        exchange_value = event_class.EXCHANGE
+        topic_value = event_class.TOPIC
+
+        if (
+            exchange_value is None
+            or exchange_value == ""
+            or topic_value is None
+            or topic_value == ""
+        ):
+            raise ValueError(
+                f"Event class {event_class.__name__} must have non-empty EXCHANGE and TOPIC"
+            )
+
     def recieve_events(self, event_classes: Sequence[type[BaseReceivedEvent]]) -> None:
         """
         Set up consumption for multiple event types with individual consumer tags.
@@ -770,25 +803,10 @@ class Warren:
         # Set up consumption for each event class
         for event_class in event_classes:
             # Validate event class has required attributes
-            if (
-                not hasattr(event_class, "EXCHANGE")
-                or event_class.EXCHANGE is None
-                or event_class.EXCHANGE == ""
-                or not hasattr(event_class, "TOPIC")
-                or event_class.TOPIC is None
-                or event_class.TOPIC == ""
-            ):
-                raise ValueError(
-                    f"Event class {event_class.__name__} must have non-empty EXCHANGE and TOPIC"
-                )
+            self._validate_event_class_attributes(event_class)
 
             exchange_name = event_class.EXCHANGE or ""
             topic = event_class.TOPIC or ""
-
-            if not exchange_name or not topic:
-                raise ValueError(
-                    f"Event class {event_class.__name__} must have non-empty EXCHANGE and TOPIC"
-                )
 
             # Declare exchange
             self._channel.exchange_declare(

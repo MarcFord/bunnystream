@@ -82,9 +82,7 @@ class TestReceiveEventsAdvanced:
         self.warren._channel = self.mock_channel
 
         # Mock basic_consume to return different consumer tags
-        self.mock_channel.basic_consume.side_effect = [
-            f"consumer_tag_{i}" for i in range(1, 11)
-        ]
+        self.mock_channel.basic_consume.side_effect = [f"consumer_tag_{i}" for i in range(1, 11)]
 
     def test_sequence_type_parameter(self):
         """Test that recieve_events accepts Sequence[type[BaseReceivedEvent]]."""
@@ -231,9 +229,7 @@ class TestReceiveEventsAdvanced:
             event_classes.append(event_class)
 
         # Set up enough mock consumer tags
-        self.mock_channel.basic_consume.side_effect = [
-            f"consumer_tag_{i}" for i in range(20)
-        ]
+        self.mock_channel.basic_consume.side_effect = [f"consumer_tag_{i}" for i in range(20)]
 
         self.warren.recieve_events(event_classes)
 
@@ -464,9 +460,7 @@ class TestReceiveEventsDocumentationExamples:
         self.warren = Warren(self.config)
         self.mock_channel = Mock()
         self.warren._channel = self.mock_channel
-        self.mock_channel.basic_consume.side_effect = [
-            f"consumer_tag_{i}" for i in range(1, 11)
-        ]
+        self.mock_channel.basic_consume.side_effect = [f"consumer_tag_{i}" for i in range(1, 11)]
 
     def test_module_docstring_example(self):
         """Test the example from the module docstring."""

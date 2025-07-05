@@ -76,9 +76,7 @@ class TestBaseEvent:
         """Test json property returns serialized data."""
         event = EventForTesting(warren=self.warren, test_key="test_value")
 
-        with patch.object(
-            event, "serialize", return_value='{"test": "data"}'
-        ) as mock_serialize:
+        with patch.object(event, "serialize", return_value='{"test": "data"}') as mock_serialize:
             result = event.json
 
             mock_serialize.assert_called_once()
@@ -166,9 +164,7 @@ class TestBaseEvent:
             "bunnystream": {"topic": "dynamic.topic", "type": ExchangeType.topic}
         }
 
-        event = EventForTestingWithBadExchangeType(
-            warren=self.warren, test_key="test_value"
-        )
+        event = EventForTestingWithBadExchangeType(warren=self.warren, test_key="test_value")
 
         with patch.object(event, "serialize", return_value='{"test": "data"}'):
             event.fire()
@@ -357,9 +353,7 @@ class TestBaseEvent:
         from datetime import datetime
 
         # Test with UUID (should hit line 268: return o.hex)
-        event = BaseEvent(
-            warren=self.warren, uuid_val=UUID("12345678-1234-5678-1234-567812345678")
-        )
+        event = BaseEvent(warren=self.warren, uuid_val=UUID("12345678-1234-5678-1234-567812345678"))
 
         # Test with non-serializable object (should hit the return str(o) branch)
         event.data["datetime_val"] = datetime(2023, 1, 1, 12, 0, 0)
@@ -467,19 +461,13 @@ class TestBaseReceivedEvent:
 
     def test_init_with_invalid_data_type(self):
         """Test BaseReceivedEvent initialization with invalid data type."""
-        with pytest.raises(
-            TypeError, match="Data must be a dictionary or a JSON string."
-        ):
+        with pytest.raises(TypeError, match="Data must be a dictionary or a JSON string."):
             BaseReceivedEvent(123)  # type: ignore
 
-        with pytest.raises(
-            TypeError, match="Data must be a dictionary or a JSON string."
-        ):
+        with pytest.raises(TypeError, match="Data must be a dictionary or a JSON string."):
             BaseReceivedEvent([1, 2, 3])  # type: ignore
 
-        with pytest.raises(
-            TypeError, match="Data must be a dictionary or a JSON string."
-        ):
+        with pytest.raises(TypeError, match="Data must be a dictionary or a JSON string."):
             BaseReceivedEvent(None)  # type: ignore
 
     def test_getitem_with_valid_key(self):
@@ -496,9 +484,7 @@ class TestBaseReceivedEvent:
         test_data = {"key": "value"}
         event = BaseReceivedEvent(test_data)
 
-        with pytest.raises(
-            KeyError, match="Key 'nonexistent' not found in event data."
-        ):
+        with pytest.raises(KeyError, match="Key 'nonexistent' not found in event data."):
             event["nonexistent"]
 
     def test_getitem_with_nested_dict(self):
@@ -526,9 +512,7 @@ class TestBaseReceivedEvent:
         """Test __getitem__ when data is None or empty."""
         event = BaseReceivedEvent("invalid json")
 
-        with pytest.raises(
-            TypeError, match="Event data is not a dictionary or is empty."
-        ):
+        with pytest.raises(TypeError, match="Event data is not a dictionary or is empty."):
             event["any_key"]
 
     def test_getattr_access(self):
@@ -808,9 +792,7 @@ class TestBaseReceivedEventIntegration:
             assert event._raw_data == malformed_json
 
             # Should raise TypeError when trying to access data
-            with pytest.raises(
-                TypeError, match="Event data is not a dictionary or is empty."
-            ):
+            with pytest.raises(TypeError, match="Event data is not a dictionary or is empty."):
                 event["any_key"]
 
         # Valid JSON but not dictionaries - these parse successfully
@@ -828,9 +810,7 @@ class TestBaseReceivedEventIntegration:
             assert event._raw_data == json_str
 
             # Should raise TypeError when trying to access as dict
-            with pytest.raises(
-                TypeError, match="Event data is not a dictionary or is empty."
-            ):
+            with pytest.raises(TypeError, match="Event data is not a dictionary or is empty."):
                 event["any_key"]
 
 
@@ -845,14 +825,10 @@ class TestBaseEventCoverageEdgeCases:
 
     def test_json_property_with_uuid(self):
         """Test JSON serialization with UUID objects via the uuid_convert function."""
-        event = BaseEvent(
-            warren=self.warren, id=UUID("12345678-1234-5678-1234-567812345678")
-        )
+        event = BaseEvent(warren=self.warren, id=UUID("12345678-1234-5678-1234-567812345678"))
 
         # Also test with a nested structure to make sure uuid_convert is called
-        event.data["nested"] = {
-            "uuid_field": UUID("87654321-4321-8765-4321-876543218765")
-        }
+        event.data["nested"] = {"uuid_field": UUID("87654321-4321-8765-4321-876543218765")}
 
         json_str = event.json
         data = json.loads(json_str)
@@ -882,9 +858,7 @@ class TestBaseEventCoverageEdgeCases:
         from datetime import datetime
 
         # Test with UUID (should hit line 268: return o.hex)
-        event = BaseEvent(
-            warren=self.warren, uuid_val=UUID("12345678-1234-5678-1234-567812345678")
-        )
+        event = BaseEvent(warren=self.warren, uuid_val=UUID("12345678-1234-5678-1234-567812345678"))
 
         # Test with non-serializable object (should hit the return str(o) branch)
         event.data["datetime_val"] = datetime(2023, 1, 1, 12, 0, 0)
@@ -1018,14 +992,10 @@ class TestDataObjectCoverageEdgeCases:
         # Manually set _data to something invalid to test the TypeError branch
         data_obj._data = "not a dict"  # type: ignore
 
-        with pytest.raises(
-            TypeError, match="Event data is not a dictionary or is empty"
-        ):
+        with pytest.raises(TypeError, match="Event data is not a dictionary or is empty"):
             data_obj["key"]
 
         # Test with None data
         data_obj._data = None  # type: ignore
-        with pytest.raises(
-            TypeError, match="Event data is not a dictionary or is empty"
-        ):
+        with pytest.raises(TypeError, match="Event data is not a dictionary or is empty"):
             data_obj["key"]
