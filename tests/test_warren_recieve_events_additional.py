@@ -82,7 +82,9 @@ class TestReceiveEventsAdvanced:
         self.warren._channel = self.mock_channel
 
         # Mock basic_consume to return different consumer tags
-        self.mock_channel.basic_consume.side_effect = [f"consumer_tag_{i}" for i in range(1, 11)]
+        self.mock_channel.basic_consume.side_effect = [
+            f"consumer_tag_{i}" for i in range(1, 11)
+        ]
 
     def test_sequence_type_parameter(self):
         """Test that recieve_events accepts Sequence[type[BaseReceivedEvent]]."""
@@ -165,6 +167,61 @@ class TestReceiveEventsAdvanced:
         with pytest.raises(ValueError, match="must have non-empty EXCHANGE and TOPIC"):
             self.warren.recieve_events([MissingBothEvent])
 
+    def test_event_class_without_required_attributes(self):
+        """Test error when event class lacks EXCHANGE and TOPIC attributes entirely."""
+
+        # Create an event class that doesn't have EXCHANGE or TOPIC attributes at all
+        class NoAttributesEvent:
+            """Event class that lacks required attributes entirely."""
+
+            def processes_event(self) -> None:
+                pass
+
+        with pytest.raises(
+            ValueError,
+            match="Event class NoAttributesEvent must have non-empty EXCHANGE and TOPIC",
+        ):
+            # Type: ignore to bypass type checking since we're testing runtime validation
+            self.warren.recieve_events([NoAttributesEvent])  # type: ignore
+
+    def test_event_class_missing_exchange_attribute(self):
+        """Test error when event class has TOPIC but no EXCHANGE attribute."""
+
+        # Create an event class that has TOPIC but no EXCHANGE attribute
+        class MissingExchangeAttrEvent:
+            """Event class missing EXCHANGE attribute."""
+
+            TOPIC = "test.topic"
+
+            def processes_event(self) -> None:
+                pass
+
+        with pytest.raises(
+            ValueError,
+            match="Event class MissingExchangeAttrEvent must have non-empty EXCHANGE and TOPIC",
+        ):
+            # Type: ignore to bypass type checking since we're testing runtime validation
+            self.warren.recieve_events([MissingExchangeAttrEvent])  # type: ignore
+
+    def test_event_class_missing_topic_attribute(self):
+        """Test error when event class has EXCHANGE but no TOPIC attribute."""
+
+        # Create an event class that has EXCHANGE but no TOPIC attribute
+        class MissingTopicAttrEvent:
+            """Event class missing TOPIC attribute."""
+
+            EXCHANGE = "test.exchange"
+
+            def processes_event(self) -> None:
+                pass
+
+        with pytest.raises(
+            ValueError,
+            match="Event class MissingTopicAttrEvent must have non-empty EXCHANGE and TOPIC",
+        ):
+            # Type: ignore to bypass type checking since we're testing runtime validation
+            self.warren.recieve_events([MissingTopicAttrEvent])  # type: ignore
+
     def test_event_class_with_whitespace_attributes(self):
         """Test event classes with whitespace-only attributes."""
 
@@ -229,7 +286,9 @@ class TestReceiveEventsAdvanced:
             event_classes.append(event_class)
 
         # Set up enough mock consumer tags
-        self.mock_channel.basic_consume.side_effect = [f"consumer_tag_{i}" for i in range(20)]
+        self.mock_channel.basic_consume.side_effect = [
+            f"consumer_tag_{i}" for i in range(20)
+        ]
 
         self.warren.recieve_events(event_classes)
 
@@ -460,7 +519,9 @@ class TestReceiveEventsDocumentationExamples:
         self.warren = Warren(self.config)
         self.mock_channel = Mock()
         self.warren._channel = self.mock_channel
-        self.mock_channel.basic_consume.side_effect = [f"consumer_tag_{i}" for i in range(1, 11)]
+        self.mock_channel.basic_consume.side_effect = [
+            f"consumer_tag_{i}" for i in range(1, 11)
+        ]
 
     def test_module_docstring_example(self):
         """Test the example from the module docstring."""
