@@ -320,10 +320,7 @@ class Warren:
         Returns:
             bool: True if connected, False otherwise.
         """
-        return (
-            self._rabbit_connection is not None
-            and not self._rabbit_connection.is_closed
-        )
+        return self._rabbit_connection is not None and not self._rabbit_connection.is_closed
 
     @property
     def connection_status(self) -> str:
@@ -502,9 +499,7 @@ class Warren:
             subscription.topic,
         )
 
-    def on_connection_error(
-        self, _connection: pika.SelectConnection, error: Exception
-    ) -> None:
+    def on_connection_error(self, _connection: pika.SelectConnection, error: Exception) -> None:
         """
         Callback when there is an error opening the RabbitMQ connection.
 
@@ -550,20 +545,14 @@ class Warren:
         if self._channel is None:
             raise WarrenNotConnected("Cannot publish, channel not available.")
 
-        self.logger.debug(
-            "Publishing message to exchange '%s' with topic '%s'", exchange, topic
-        )
-        self._channel.exchange_declare(
-            exchange=exchange, exchange_type=exchange_type, durable=True
-        )
+        self.logger.debug("Publishing message to exchange '%s' with topic '%s'", exchange, topic)
+        self._channel.exchange_declare(exchange=exchange, exchange_type=exchange_type, durable=True)
 
         self._channel.basic_publish(
             exchange=exchange,
             routing_key=topic,
             body=message,
-            properties=pika.BasicProperties(
-                content_type="application/json", delivery_mode=2
-            ),
+            properties=pika.BasicProperties(content_type="application/json", delivery_mode=2),
         )
 
     def start_consuming(self, message_callback: Callable) -> None:
@@ -600,9 +589,7 @@ class Warren:
                 self._consumer_tag,
             )
 
-    def _on_message(
-        self, channel: Any, method: Any, properties: Any, body: Any
-    ) -> None:
+    def _on_message(self, channel: Any, method: Any, properties: Any, body: Any) -> None:
         """
         Internal message handler that wraps the user callback.
 

@@ -421,12 +421,12 @@ class BaseReceivedEvent:
             >>> def manual_ack_handler(channel, method, properties, body):
             ...     # Create event with channel and method for manual ack
             ...     event = BaseReceivedEvent(body, channel, method)
-            ...     
+            ...
             ...     try:
             ...         # Process the message
             ...         user_id = event.user_id
             ...         process_user_data(user_id)
-            ...         
+            ...
             ...         # Manually acknowledge after successful processing
             ...         event.ack_event()
             ...         print(f"✅ User {user_id} processed and acknowledged")
@@ -584,7 +584,9 @@ class BaseReceivedEvent:
     EXCHANGE = None  # use the default exchange
     EXCHANGE_TYPE = ExchangeType.topic  # use the default topic
 
-    def __init__(self, data: Union[dict, str], channel: Any = None, method: Any = None) -> None:
+    def __init__(
+        self, data: Union[dict, str], channel: Any = None, method: Any = None
+    ) -> None:
         if isinstance(data, str):
             self._raw_data = data
             # Attempt to parse the string as JSON
@@ -597,7 +599,7 @@ class BaseReceivedEvent:
             self.data = data
         else:
             raise TypeError("Data must be a dictionary or a JSON string.")
-        
+
         # Store channel and method for manual acknowledgment
         self._channel = channel
         self._method = method
@@ -632,12 +634,12 @@ class BaseReceivedEvent:
             Basic Manual Acknowledgment:
                 >>> def message_handler(channel, method, properties, body):
                 ...     event = BaseReceivedEvent(body, channel, method)
-                ...     
+                ...
                 ...     try:
                 ...         # Process the message
                 ...         print(f"Processing user {event.user_id}")
                 ...         # ... business logic here ...
-                ...         
+                ...
                 ...         # Acknowledge after successful processing
                 ...         event.ack_event()
                 ...     except Exception as e:
@@ -647,7 +649,7 @@ class BaseReceivedEvent:
             Conditional Acknowledgment:
                 >>> def selective_handler(channel, method, properties, body):
                 ...     event = BaseReceivedEvent(body, channel, method)
-                ...     
+                ...
                 ...     if event.priority == 'high':
                 ...         # Process high priority immediately
                 ...         process_high_priority(event)
@@ -660,7 +662,7 @@ class BaseReceivedEvent:
             Error Handling with Manual Ack:
                 >>> def robust_handler(channel, method, properties, body):
                 ...     event = BaseReceivedEvent(body, channel, method)
-                ...     
+                ...
                 ...     try:
                 ...         result = process_event(event)
                 ...         if result.success:
@@ -692,7 +694,7 @@ class BaseReceivedEvent:
                 "Cannot acknowledge event: channel and method information not available. "
                 "Make sure to pass channel and method when creating BaseReceivedEvent."
             )
-        
+
         try:
             self._channel.basic_ack(delivery_tag=self._method.delivery_tag)
         except Exception as e:

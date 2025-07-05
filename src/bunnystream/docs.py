@@ -13,7 +13,7 @@ For interactive help, try:
 """
 
 
-def show_examples():
+def show_examples() -> None:
     """
     Display comprehensive examples for BunnyStream usage.
 
@@ -21,18 +21,19 @@ def show_examples():
     including setup, configuration, publishing, consuming, and monitoring.
     """
 
-    print("""
+    print(
+        """
 === BunnyStream Comprehensive Examples ===
 
 1. BASIC SETUP AND CONNECTION
-    
+
     # Simple producer setup
     from bunnystream import Warren, BunnyStreamConfig
-    
+
     config = BunnyStreamConfig(mode="producer")
     warren = Warren(config)
     warren.connect()
-    
+
     # Check connection status
     print(f"Connected: {warren.is_connected}")
     print(f"Status: {warren.connection_status}")
@@ -45,16 +46,16 @@ def show_examples():
         exchange="user_events",
         topic="user.login"
     )
-    
+
     # Type-safe event publishing
     from bunnystream import BaseEvent
     from pika.exchange_type import ExchangeType
-    
+
     class UserLoginEvent(BaseEvent):
         EXCHANGE = "user_events"
         TOPIC = "user.login"
         EXCHANGE_TYPE = ExchangeType.topic
-    
+
     event = UserLoginEvent({
         "user_id": 123,
         "timestamp": "2025-01-01T12:00:00Z",
@@ -68,33 +69,33 @@ def show_examples():
     def message_handler(channel, method, properties, body):
         print(f"Received: {body.decode()}")
         # Message is automatically acknowledged
-    
+
     config = BunnyStreamConfig(mode="consumer")
     warren = Warren(config)
     warren.connect()
     warren.start_consuming(message_handler)
     warren.start_io_loop()  # Blocking call
-    
+
     # Type-safe event consumption
     from bunnystream import BaseReceivedEvent
-    
+
     def typed_message_handler(channel, method, properties, body):
         event = BaseReceivedEvent(body)
         print(f"User {event.user_id} logged in at {event.timestamp}")
         print(f"From IP: {event.ip_address}")
 
 4. CUSTOM SUBSCRIPTIONS
-    
+
     from bunnystream import Subscription
     from pika.exchange_type import ExchangeType
-    
+
     # Create custom subscription
     subscription = Subscription(
         exchange_name="orders",
         exchange_type=ExchangeType.topic,
         topic="order.created"
     )
-    
+
     config = BunnyStreamConfig(
         mode="consumer",
         subscriptions=[subscription]
@@ -107,7 +108,7 @@ def show_examples():
     import os
     os.environ['RABBITMQ_URL'] = 'amqp://user:pass@rabbit.example.com:5672/prod'
     os.environ['RABBIT_PREFETCH_COUNT'] = '10'
-    
+
     # Auto-configure from environment
     config = BunnyStreamConfig()
     print(f"Host: {config.rabbit_host}")
@@ -116,7 +117,7 @@ def show_examples():
 6. SSL/TLS CONNECTIONS
 
     import ssl
-    
+
     config = BunnyStreamConfig(
         rabbit_host="secure.rabbit.example.com",
         rabbit_port=5671,
@@ -137,14 +138,14 @@ def show_examples():
         print("✅ Connected to RabbitMQ")
     else:
         print(f"❌ Status: {warren.connection_status}")
-    
+
     # Detailed monitoring
     info = warren.get_connection_info()
     print(f"Host: {info['host']}:{info['port']}")
     print(f"Virtual Host: {info['virtual_host']}")
     print(f"Mode: {info['mode']}")
     print(f"Has Channel: {info['has_channel']}")
-    
+
     # Monitoring loop
     import time
     def monitor_connection():
@@ -166,7 +167,7 @@ def show_examples():
         BunnyStreamConfigurationError,
         RabbitHostError
     )
-    
+
     try:
         warren.publish("message", "exchange", "topic")
     except WarrenNotConnected:
@@ -183,26 +184,26 @@ def show_examples():
     class OrderEvent(BaseEvent):
         EXCHANGE = "orders"
         TOPIC = "order.created"
-        
+
         def __init__(self, order_data):
             super().__init__(order_data)
             self["timestamp"] = self.get_current_timestamp()
             self["host"] = self.get_host_ip_address()
-    
+
     order = OrderEvent({
         "order_id": "ORD-123",
         "customer_id": 456,
         "amount": 99.99
     })
     order.fire(warren)
-    
+
     # Event consumption with data object
     from bunnystream import DataObject
-    
+
     def process_order(channel, method, properties, body):
         event = BaseReceivedEvent(body)
         order_data = DataObject(event.data)
-        
+
         print(f"Order {order_data.order_id}")
         print(f"Customer: {order_data.customer_id}")
         print(f"Amount: ${order_data.amount}")
@@ -212,7 +213,7 @@ def show_examples():
     # Proper startup
     config = BunnyStreamConfig(mode="consumer")
     warren = Warren(config)
-    
+
     try:
         warren.connect()
         warren.start_consuming(message_handler)
@@ -231,7 +232,7 @@ def show_examples():
         Subscription("orders", ExchangeType.topic, "order.*"),
         Subscription("notifications", ExchangeType.direct, "email")
     ]
-    
+
     config = BunnyStreamConfig(
         mode="consumer",
         subscriptions=subscriptions
@@ -240,10 +241,12 @@ def show_examples():
 12. LOGGING CONFIGURATION
 
     from bunnystream import configure_bunny_logger, get_bunny_logger
-    
+
     # Configure package-wide logging
-    configure_bunny_logger(level="DEBUG", format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    
+    configure_bunny_logger(
+        level="DEBUG", format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+
     # Get component-specific logger
     logger = get_bunny_logger("my_app")
     logger.info("Application started")
@@ -289,13 +292,15 @@ For more examples and detailed API documentation, use:
     help(bunnystream.BunnyStreamConfig)
     help(bunnystream.BaseEvent)
     help(bunnystream.BaseReceivedEvent)
-""")
+"""
+    )
 
 
-def show_troubleshooting():
+def show_troubleshooting() -> None:
     """Show common troubleshooting tips and solutions."""
 
-    print("""
+    print(
+        """
 === BUNNYSTREAM TROUBLESHOOTING GUIDE ===
 
 COMMON ISSUES AND SOLUTIONS:
@@ -388,7 +393,8 @@ For more help:
 - Use RabbitMQ management interface
 - Enable BunnyStream debug logging
 - Check network connectivity with telnet
-""")
+"""
+    )
 
 
 if __name__ == "__main__":
