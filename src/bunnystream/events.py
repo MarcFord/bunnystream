@@ -35,13 +35,15 @@ Dependencies:
 import json
 import platform
 import socket
+from abc import abstractmethod
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Union
 from uuid import UUID
 
 from pika.exchange_type import ExchangeType  # type: ignore
 
-from bunnystream.exceptions import WarrenNotConfigured
+from bunnystream.exceptions import EventProcessingError, WarrenNotConfigured
+from bunnystream.logger import get_bunny_logger
 
 if TYPE_CHECKING:
     from bunnystream.warren import Warren
@@ -223,9 +225,9 @@ class BaseEvent:
         BunnyStreamConfig: For configuration management
     """
 
-    TOPIC = None
-    EXCHANGE = None
-    EXCHANGE_TYPE = ExchangeType.topic
+    TOPIC: Union[str, None] = None
+    EXCHANGE: Union[str, None] = None
+    EXCHANGE_TYPE: ExchangeType = ExchangeType.topic
 
     def __init__(self, warren: "Warren", **data: Any) -> None:
         self._warren = warren
@@ -279,16 +281,20 @@ class BaseEvent:
         if self._warren is None:
             raise WarrenNotConfigured()
 
-        if self.EXCHANGE is None or not isinstance(self.EXCHANGE_TYPE, ExchangeType):  # type: ignore[unreachable]
+        if self.EXCHANGE is None or not isinstance(self.EXCHANGE_TYPE, ExchangeType):
             exchange_name = self._warren.config.exchange_name
             subscription = self._warren.config.subscription_mappings.get(exchange_name)
             if subscription is None:
                 raise WarrenNotConfigured(
                     "No topic is set for this event and no subscription mapping is found."
                 )
-            self.TOPIC = subscription["topic"]
-            self.EXCHANGE = exchange_name
-            self.EXCHANGE_TYPE = subscription.get("type", ExchangeType.topic)
+            self.TOPIC = str(subscription["topic"])
+            self.EXCHANGE = str(exchange_name)
+            exchange_type = subscription.get("type", ExchangeType.topic)
+            if isinstance(exchange_type, ExchangeType):
+                self.EXCHANGE_TYPE = exchange_type
+            else:
+                self.EXCHANGE_TYPE = ExchangeType.topic
 
         # Ensure we have valid values
         topic = self.TOPIC
@@ -297,9 +303,8 @@ class BaseEvent:
 
         # At this point, EXCHANGE_TYPE is guaranteed to be valid due to the
         # fallback logic above
-        assert isinstance(
-            self.EXCHANGE_TYPE, ExchangeType
-        ), "EXCHANGE_TYPE should be valid"  # nosec B101
+        if not isinstance(self.EXCHANGE_TYPE, ExchangeType):
+            raise ValueError("EXCHANGE_TYPE should be valid")
 
         return self._warren.publish(
             topic=topic,
@@ -582,6 +587,7 @@ class BaseReceivedEvent:
     """
 
     EXCHANGE = None  # use the default exchange
+    TOPIC = None  # use the default topic
     EXCHANGE_TYPE = ExchangeType.topic  # use the default topic
 
     def __init__(
@@ -603,6 +609,40 @@ class BaseReceivedEvent:
         # Store channel and method for manual acknowledgment
         self._channel = channel
         self._method = method
+        self.logger = get_bunny_logger(__name__)
+        self._event_properties = None
+
+    @property
+    def properties(self) -> Any:
+        """
+        Returns the event properties if available.
+        This is useful for accessing RabbitMQ message properties.
+        """
+        return self._event_properties
+
+    @properties.setter
+    def properties(self, value: Any) -> None:
+        """
+        Sets the event properties.
+        This allows you to store additional metadata or RabbitMQ message properties.
+        """
+        self._event_properties = value
+
+    @property
+    def exchange_name(self) -> str:
+        """
+        Returns the exchange name for this event.
+        If EXCHANGE is not set, returns the default exchange name.
+        """
+        return self.EXCHANGE if self.EXCHANGE else ""
+
+    @property
+    def topic(self) -> str:
+        """
+        Returns the topic for this event.
+        If TOPIC is not set, returns an empty string.
+        """
+        return self.TOPIC if self.TOPIC else ""
 
     def __getitem__(self, item: Any) -> Any:
         if self.data is not None and isinstance(self.data, dict):
@@ -618,6 +658,51 @@ class BaseReceivedEvent:
         Allows attribute-like access to the event data.
         """
         return self.__getitem__(item)
+
+    @abstractmethod
+    def processes_event(self) -> None:
+        """
+        Processes the event data.
+        This method must be implemented in subclasses to provide custom processing logic.
+        """
+
+    @classmethod
+    def _on_message(
+        cls,
+        channel: Any,
+        method: Any,
+        properties: Any,  # pylint: disable=unused-argument
+        body: Any,
+    ) -> None:
+        """
+        Handles incoming messages from a message broker channel.
+
+        This class method is invoked when a new message is received. It initializes an
+        event instance with the provided message data and channel information, processes
+        the event, and acknowledges the message. If an exception occurs during event
+        processing, it is silently ignored.
+
+        Args:
+            channel (Any): The channel object from which the message was received.
+            method (Any): Delivery method information for the message.
+            properties (Any): Message properties.
+            body (Any): The message payload.
+
+        Returns:
+            None
+        """
+        event = cls(data=body, channel=channel, method=method)
+        event.properties = properties
+        try:
+            event.processes_event()
+        except Exception as e:
+            event.logger.error(
+                "Error processing event: %s. Message will be redelivered if "
+                "auto-acknowledgment is not set.",
+                e,
+            )
+            raise EventProcessingError from e
+        event.ack_event()
 
     def ack_event(self) -> None:
         """

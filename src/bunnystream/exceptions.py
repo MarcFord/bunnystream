@@ -132,3 +132,10 @@ class WarrenNotConnected(BunnyStreamError):
 
     def __init__(self, message: str = "Warren instance is not connected."):
         super().__init__(message)
+
+
+class EventProcessingError(BunnyStreamError):
+    """Exception raised for errors during event processing."""
+
+    def __init__(self, message: str = "An error occurred while processing the event."):
+        super().__init__(message)

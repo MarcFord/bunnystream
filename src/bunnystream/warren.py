@@ -40,6 +40,45 @@ Examples:
         >>> warren.connect()
         >>> warren.start_consuming(process_message)
 
+    Quick Start - Multiple Event Types:
+        >>> class UserEvent(BaseReceivedEvent):
+        ...     EXCHANGE = "user_events"
+        ...     TOPIC = "user.login"
+        ...     def processes_event(self):
+        ...         print(f"🟢 User {self.user_id} logged in")
+        ...
+        >>> class OrderEvent(BaseReceivedEvent):
+        ...     EXCHANGE = "order_events"
+        ...     TOPIC = "order.created"
+        ...     def processes_event(self):
+        ...         print(f"📦 Order {self.order_id} created")
+        ...
+        >>> config = BunnyStreamConfig(mode="consumer")
+        >>> warren = Warren(config)
+        >>> warren.connect()
+        >>> # Each event class gets its own consumer tag for independent processing
+        >>> warren.recieve_events([UserEvent, OrderEvent])
+        >>> print(f"Active consumers: {warren.get_consumer_count()}")  # Shows: 2
+        >>> warren.start_io_loop()
+
+    Advanced Multi-Event Usage:
+        >>> # Define event classes with different exchange types
+        >>> class SystemEvent(BaseReceivedEvent):
+        ...     EXCHANGE = "system_events"
+        ...     TOPIC = "system.alert"
+        ...     EXCHANGE_TYPE = ExchangeType.direct
+        ...
+        ...     def processes_event(self):
+        ...         level = self.data.get('level', 'info')
+        ...         message = self.data.get('message', 'No message')
+        ...         print(f"⚠️  System {level}: {message}")
+        >>>
+        >>> # Consumer management
+        >>> warren.recieve_events([SystemEvent])
+        >>> print(f"Total consumers: {warren.get_consumer_count()}")
+        >>> warren.stop_consuming()  # Stops all consumers
+        >>> print(f"Consumers after stop: {warren.get_consumer_count()}")  # Shows: 0
+
     Connection Monitoring:
         >>> if warren.is_connected:
         ...     print("RabbitMQ is available")
@@ -74,12 +113,13 @@ Performance Notes:
     - Tune prefetch_count for optimal consumer performance
 """
 
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Optional, Sequence, Union
 
 import pika  # type: ignore
 from pika.exchange_type import ExchangeType  # type: ignore
 
 from bunnystream.config import BunnyStreamConfig
+from bunnystream.events import BaseReceivedEvent
 from bunnystream.exceptions import BunnyStreamConfigurationError, WarrenNotConnected
 from bunnystream.logger import get_bunny_logger
 
@@ -182,6 +222,81 @@ class Warren:
             >>> warren = Warren(config)
             >>> # Queues are automatically declared with x-queue-type=quorum
 
+        Multiple Event Types with recieve_events():
+            >>> from bunnystream import BaseReceivedEvent
+            >>> from pika.exchange_type import ExchangeType
+            >>>
+            >>> class UserLoginEvent(BaseReceivedEvent):
+            ...     EXCHANGE = "user_events"
+            ...     TOPIC = "user.login"
+            ...     EXCHANGE_TYPE = ExchangeType.topic
+            ...
+            ...     def processes_event(self):
+            ...         user_id = self.data.get('user_id')
+            ...         timestamp = self.data.get('timestamp')
+            ...         print(f"🟢 User {user_id} logged in at {timestamp}")
+            >>>
+            >>> class OrderCreatedEvent(BaseReceivedEvent):
+            ...     EXCHANGE = "order_events"
+            ...     TOPIC = "order.created"
+            ...     EXCHANGE_TYPE = ExchangeType.direct
+            ...
+            ...     def processes_event(self):
+            ...         order_id = self.data.get('order_id')
+            ...         amount = self.data.get('amount')
+            ...         print(f"📦 Order {order_id} created for ${amount}")
+            >>>
+            >>> class SystemAlertEvent(BaseReceivedEvent):
+            ...     EXCHANGE = "system_events"
+            ...     TOPIC = "system.alert"
+            ...     EXCHANGE_TYPE = ExchangeType.fanout
+            ...
+            ...     def processes_event(self):
+            ...         alert_type = self.data.get('type', 'info')
+            ...         message = self.data.get('message')
+            ...         print(f"⚠️  {alert_type.upper()}: {message}")
+            >>>
+            >>> # Set up consumption for multiple event types
+            >>> config = BunnyStreamConfig(mode="consumer")
+            >>> warren = Warren(config)
+            >>> warren.connect()
+            >>>
+            >>> # Each event class gets its own consumer tag and queue
+            >>> warren.recieve_events([UserLoginEvent, OrderCreatedEvent, SystemAlertEvent])
+            >>> print(f"Active consumers: {warren.get_consumer_count()}")  # Shows: 3
+            >>>
+            >>> # All events are processed independently and concurrently
+            >>> warren.start_io_loop()
+
+        Advanced recieve_events() Usage:
+            >>> # Handle different event groups
+            >>> user_events = [UserLoginEvent, UserLogoutEvent, UserUpdateEvent]
+            >>> order_events = [OrderCreatedEvent, OrderCancelledEvent, OrderShippedEvent]
+            >>>
+            >>> # Set up all user event consumers
+            >>> warren.recieve_events(user_events)
+            >>> print(f"User event consumers: {warren.get_consumer_count()}")
+            >>>
+            >>> # Add order event consumers
+            >>> warren.recieve_events(order_events)
+            >>> print(f"Total consumers: {warren.get_consumer_count()}")
+            >>>
+            >>> # Stop all consumers at once
+            >>> warren.stop_consuming()
+            >>> print(f"Consumers after stop: {warren.get_consumer_count()}")  # Shows: 0
+
+        Combining Traditional and Event-based Consumption:
+            >>> # Traditional callback-based consumption
+            >>> def legacy_handler(channel, method, properties, body):
+            ...     print(f"Legacy message: {body.decode()}")
+            >>>
+            >>> warren.start_consuming(legacy_handler)  # Creates 1 consumer
+            >>> warren.recieve_events([UserLoginEvent])  # Adds 1 more consumer
+            >>> print(f"Total consumers: {warren.get_consumer_count()}")  # Shows: 2
+            >>>
+            >>> # Both traditional and event-based consumers work together
+            >>> warren.start_io_loop()
+
         Error Handling:
             >>> try:
             ...     warren.connect()
@@ -230,6 +345,9 @@ class Warren:
         self._config = config
         self._channel = None
         self._consumer_tag = None
+        self._consumer_tags: list[
+            str
+        ] = []  # Track multiple consumer tags for recieve_events
         self._consumer_callback: Optional[Callable] = None
 
         # Initialize logger for this instance
@@ -320,7 +438,10 @@ class Warren:
         Returns:
             bool: True if connected, False otherwise.
         """
-        return self._rabbit_connection is not None and not self._rabbit_connection.is_closed
+        return (
+            self._rabbit_connection is not None
+            and not self._rabbit_connection.is_closed
+        )
 
     @property
     def connection_status(self) -> str:
@@ -499,7 +620,9 @@ class Warren:
             subscription.topic,
         )
 
-    def on_connection_error(self, _connection: pika.SelectConnection, error: Exception) -> None:
+    def on_connection_error(
+        self, _connection: pika.SelectConnection, error: Exception
+    ) -> None:
         """
         Callback when there is an error opening the RabbitMQ connection.
 
@@ -545,14 +668,20 @@ class Warren:
         if self._channel is None:
             raise WarrenNotConnected("Cannot publish, channel not available.")
 
-        self.logger.debug("Publishing message to exchange '%s' with topic '%s'", exchange, topic)
-        self._channel.exchange_declare(exchange=exchange, exchange_type=exchange_type, durable=True)
+        self.logger.debug(
+            "Publishing message to exchange '%s' with topic '%s'", exchange, topic
+        )
+        self._channel.exchange_declare(
+            exchange=exchange, exchange_type=exchange_type, durable=True
+        )
 
         self._channel.basic_publish(
             exchange=exchange,
             routing_key=topic,
             body=message,
-            properties=pika.BasicProperties(content_type="application/json", delivery_mode=2),
+            properties=pika.BasicProperties(
+                content_type="application/json", delivery_mode=2
+            ),
         )
 
     def start_consuming(self, message_callback: Callable) -> None:
@@ -589,7 +718,114 @@ class Warren:
                 self._consumer_tag,
             )
 
-    def _on_message(self, channel: Any, method: Any, properties: Any, body: Any) -> None:
+    def recieve_events(self, event_classes: Sequence[type[BaseReceivedEvent]]) -> None:
+        """
+        Set up consumption for multiple event types with individual consumer tags.
+
+        This method allows you to register multiple event classes for consumption.
+        Each event class should be a subclass of BaseReceivedEvent with EXCHANGE
+        and TOPIC attributes defined. The method will:
+        1. Declare the necessary exchanges and queues for each event class
+        2. Set up individual message consumption for each event type
+        3. Route messages to the appropriate event class for processing
+        4. Track each consumer with its own unique consumer tag
+
+        Each event class gets its own consumer tag, allowing for independent
+        consumption control and proper message routing.
+
+        Args:
+            event_classes (Sequence[type[BaseReceivedEvent]]): Sequence of event classes to consume.
+                Each class must have EXCHANGE and TOPIC attributes defined.
+
+        Raises:
+            WarrenNotConnected: If no channel is available.
+            BunnyStreamConfigurationError: If not in consumer mode.
+            ValueError: If an event class doesn't have required attributes.
+
+        Example:
+            >>> class UserLoginEvent(BaseReceivedEvent):
+            ...     EXCHANGE = "user_events"
+            ...     TOPIC = "user.login"
+            ...     def processes_event(self):
+            ...         print(f"User {self.user_id} logged in")
+            >>>
+            >>> class UserLogoutEvent(BaseReceivedEvent):
+            ...     EXCHANGE = "user_events"
+            ...     TOPIC = "user.logout"
+            ...     def processes_event(self):
+            ...         print(f"User {self.user_id} logged out")
+            >>>
+            >>> # Each event class gets its own consumer tag for independent processing
+            >>> warren.recieve_events([UserLoginEvent, UserLogoutEvent])
+            >>> warren.start_io_loop()
+        """
+        if self._channel is None:
+            raise WarrenNotConnected("Cannot start consuming, channel not available.")
+
+        if self.config.mode != "consumer":
+            raise BunnyStreamConfigurationError(
+                "Warren must be in 'consumer' mode to start consuming messages."
+            )
+
+        # Set up consumption for each event class
+        for event_class in event_classes:
+            # Validate event class has required attributes
+            if not hasattr(event_class, "EXCHANGE") or not hasattr(
+                event_class, "TOPIC"
+            ):
+                raise ValueError(
+                    f"Event class {event_class.__name__} must define EXCHANGE and TOPIC attributes"
+                )
+
+            exchange_name = event_class.EXCHANGE or ""
+            topic = event_class.TOPIC or ""
+
+            if not exchange_name or not topic:
+                raise ValueError(
+                    f"Event class {event_class.__name__} must have non-empty EXCHANGE and TOPIC"
+                )
+
+            # Declare exchange
+            self._channel.exchange_declare(
+                exchange=exchange_name,
+                exchange_type=getattr(event_class, "EXCHANGE_TYPE", ExchangeType.topic),
+                durable=True,
+            )
+
+            # Declare queue with quorum type
+            queue_name = f"{exchange_name}.{topic}"
+            self._channel.queue_declare(
+                queue=queue_name, durable=True, arguments={"x-queue-type": "quorum"}
+            )
+
+            # Bind queue to exchange
+            self._channel.queue_bind(
+                exchange=exchange_name,
+                queue=queue_name,
+                routing_key=topic,
+            )
+
+            # Set up consumption
+            consumer_tag = self._channel.basic_consume(
+                queue=queue_name,
+                on_message_callback=event_class._on_message,  # pylint: disable=protected-access
+                auto_ack=False,
+            )
+
+            # Store the consumer tag for this event class
+            self._consumer_tags.append(consumer_tag)
+
+            self.logger.info(
+                "Set up consumption for event class '%s' on exchange '%s' topic '%s' (tag: %s)",
+                event_class.__name__,
+                exchange_name,
+                topic,
+                consumer_tag,
+            )
+
+    def _on_message(
+        self, channel: Any, method: Any, properties: Any, body: Any
+    ) -> None:
         """
         Internal message handler that wraps the user callback.
 
@@ -615,10 +851,20 @@ class Warren:
 
     def stop_consuming(self) -> None:
         """Stop consuming messages."""
-        if self._channel and self._consumer_tag:
-            self._channel.basic_cancel(self._consumer_tag)
-            self._consumer_tag = None
-            self.logger.info("Stopped consuming messages")
+        if self._channel:
+            # Stop the single consumer tag (from start_consuming)
+            if self._consumer_tag:
+                self._channel.basic_cancel(self._consumer_tag)
+                self._consumer_tag = None
+                self.logger.info("Stopped consuming messages (single consumer)")
+
+            # Stop all consumer tags (from recieve_events)
+            for consumer_tag in self._consumer_tags:
+                self._channel.basic_cancel(consumer_tag)
+                self.logger.info("Stopped consuming for consumer tag: %s", consumer_tag)
+
+            self._consumer_tags.clear()
+            self.logger.info("Stopped all message consumption")
 
     def start_io_loop(self) -> None:
         """Start the IO loop for async operations."""
@@ -637,3 +883,25 @@ class Warren:
         if self._rabbit_connection and not self._rabbit_connection.is_closed:
             self.logger.info("Disconnecting from RabbitMQ")
             self._rabbit_connection.close()
+
+    def get_consumer_count(self) -> int:
+        """
+        Get the number of active consumers.
+
+        This method returns the total number of active consumers, including
+        both single consumers (from start_consuming) and multiple event-based
+        consumers (from recieve_events).
+
+        Returns:
+            int: Total number of active consumers
+
+        Example:
+            >>> warren.start_consuming(callback)
+            >>> warren.recieve_events([EventClass1, EventClass2])
+            >>> count = warren.get_consumer_count()  # Returns 3
+        """
+        count = 0
+        if self._consumer_tag:
+            count += 1
+        count += len(self._consumer_tags)
+        return count

@@ -84,7 +84,77 @@ def show_examples() -> None:
         print(f"User {event.user_id} logged in at {event.timestamp}")
         print(f"From IP: {event.ip_address}")
 
-4. CUSTOM SUBSCRIPTIONS
+4. MULTIPLE EVENT TYPES (NEW!)
+
+    # Define event classes for different event types
+    class UserLoginEvent(BaseReceivedEvent):
+        EXCHANGE = "user_events"
+        TOPIC = "user.login"
+
+        def processes_event(self):
+            print(f"🟢 User {self.user_id} logged in")
+
+    class UserLogoutEvent(BaseReceivedEvent):
+        EXCHANGE = "user_events"
+        TOPIC = "user.logout"
+
+        def processes_event(self):
+            print(f"🔴 User {self.user_id} logged out")
+
+    class OrderCreatedEvent(BaseReceivedEvent):
+        EXCHANGE = "order_events"
+        TOPIC = "order.created"
+        EXCHANGE_TYPE = ExchangeType.direct  # Different exchange type
+
+        def processes_event(self):
+            print(f"📦 Order {self.order_id} created for ${self.amount}")
+
+    class SystemAlertEvent(BaseReceivedEvent):
+        EXCHANGE = "system_events"
+        TOPIC = "system.alert"
+        EXCHANGE_TYPE = ExchangeType.fanout  # Broadcast to all consumers
+
+        def processes_event(self):
+            level = self.data.get('level', 'info')
+            message = self.data.get('message', 'No message')
+            print(f"⚠️  {level.upper()}: {message}")
+
+    # Set up consumption for multiple event types
+    config = BunnyStreamConfig(mode="consumer")
+    warren = Warren(config)
+    warren.connect()
+
+    # Each event class gets its own consumer tag and processing logic
+    warren.recieve_events([
+        UserLoginEvent,
+        UserLogoutEvent,
+        OrderCreatedEvent,
+        SystemAlertEvent
+    ])
+
+    # Monitor active consumers
+    print(f"Active consumers: {warren.get_consumer_count()}")  # Shows: 4
+
+    # Start processing events (blocking call)
+    warren.start_io_loop()
+
+    # Advanced usage: Add more event types dynamically
+    class PaymentProcessedEvent(BaseReceivedEvent):
+        EXCHANGE = "payment_events"
+        TOPIC = "payment.processed"
+
+        def processes_event(self):
+            print(f"💳 Payment {self.payment_id} processed: ${self.amount}")
+
+    # Add additional event consumers to existing ones
+    warren.recieve_events([PaymentProcessedEvent])
+    print(f"Total consumers after addition: {warren.get_consumer_count()}")  # Shows: 5
+
+    # Stop all consumers at once (both traditional and event-based)
+    warren.stop_consuming()
+    print(f"Consumers after stop: {warren.get_consumer_count()}")  # Shows: 0
+
+5. CUSTOM SUBSCRIPTIONS
 
     from bunnystream import Subscription
     from pika.exchange_type import ExchangeType
@@ -102,7 +172,7 @@ def show_examples() -> None:
     )
     warren = Warren(config)
 
-5. ENVIRONMENT CONFIGURATION
+6. ENVIRONMENT CONFIGURATION
 
     # Set environment variables
     import os
@@ -343,6 +413,28 @@ COMMON ISSUES AND SOLUTIONS:
    - Monitor queue depths
    - Use appropriate exchange types
    - Consider connection pooling
+
+6. recieve_events() Issues
+   Problem: Event classes not being processed
+   Solutions:
+   - Ensure event classes have EXCHANGE and TOPIC attributes
+   - Check that EXCHANGE and TOPIC are not None or empty
+   - Verify event classes inherit from BaseReceivedEvent
+   - Confirm Warren is in 'consumer' mode
+   - Check that processes_event() method is implemented
+
+   Problem: Some events not received
+   Solutions:
+   - Verify exchange types match message routing
+   - Check topic patterns for wildcards (# and *)
+   - Ensure queues are properly bound to exchanges
+   - Monitor consumer tags with get_consumer_count()
+
+   Problem: Consumer tags not being cleaned up
+   Solutions:
+   - Always call stop_consuming() when shutting down
+   - Check that all consumer tags are cancelled
+   - Monitor active consumers with get_consumer_count()
 
 DEBUGGING COMMANDS:
 
