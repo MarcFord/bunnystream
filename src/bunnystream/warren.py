@@ -1,8 +1,77 @@
 """
-Warren class for managing RabbitMQ connections and configurations.
+Warren: RabbitMQ Connection and Configuration Management Module.
 
-This module provides the Warren class which handles RabbitMQ connection
-parameters, URL parsing, and configuration management.
+This module provides the Warren class, which serves as the primary interface for
+managing RabbitMQ connections, channels, and messaging operations in BunnyStream.
+Warren handles both producer and consumer patterns with automatic resource
+management and comprehensive connection monitoring.
+
+The module implements:
+    - Asynchronous RabbitMQ connection handling via pika
+    - Automatic queue and exchange declaration
+    - Connection status monitoring and health checks
+    - Robust error handling and logging
+    - Support for SSL/TLS connections
+    - Environment-based configuration
+
+Classes:
+    Warren: Main connection and messaging management class
+
+Dependencies:
+    - pika: RabbitMQ client library
+    - bunnystream.config: Configuration management
+    - bunnystream.exceptions: Custom exception classes
+    - bunnystream.logger: Logging utilities
+
+Examples:
+    Quick Start - Producer:
+        >>> from bunnystream import BunnyStreamConfig, Warren
+        >>> config = BunnyStreamConfig(mode="producer")
+        >>> warren = Warren(config)
+        >>> warren.connect()
+        >>> warren.publish("Hello World", "my_exchange", "my.topic")
+
+    Quick Start - Consumer:
+        >>> def process_message(channel, method, properties, body):
+        ...     print(f"Got: {body.decode()}")
+        ...
+        >>> config = BunnyStreamConfig(mode="consumer")
+        >>> warren = Warren(config)
+        >>> warren.connect()
+        >>> warren.start_consuming(process_message)
+
+    Connection Monitoring:
+        >>> if warren.is_connected:
+        ...     print("RabbitMQ is available")
+        ... else:
+        ...     print(f"Status: {warren.connection_status}")
+
+Environment Variables:
+    The Warren class respects these environment variables through BunnyStreamConfig:
+
+    RABBITMQ_URL: Complete connection string (amqp://user:pass@host:port/vhost)
+    RABBIT_HOST: RabbitMQ server hostname (default: localhost)
+    RABBIT_PORT: RabbitMQ server port (default: 5672)
+    RABBIT_USER: Username for authentication (default: guest)
+    RABBIT_PASS: Password for authentication (default: guest)
+    RABBIT_VHOST: Virtual host (default: /)
+
+    Advanced options:
+    RABBIT_CHANNEL_MAX: Maximum channels per connection
+    RABBIT_FRAME_MAX: Maximum frame size
+    RABBIT_HEARTBEAT: Heartbeat interval
+    RABBIT_SSL: Enable SSL (true/false)
+    RABBIT_SSL_PORT: SSL port (default: 5671)
+
+Thread Safety:
+    Warren is not thread-safe. Create separate instances for different threads
+    or use appropriate synchronization mechanisms.
+
+Performance Notes:
+    - Use connection pooling for high-throughput applications
+    - Consider batch publishing for better performance
+    - Monitor queue depths and consumer lag
+    - Tune prefetch_count for optimal consumer performance
 """
 
 from typing import Any, Callable, Optional, Union
@@ -17,11 +86,136 @@ from bunnystream.logger import get_bunny_logger
 
 class Warren:
     """
-    Warren class for managing RabbitMQ connection parameters.
+    Warren: Advanced RabbitMQ Connection and Message Management System.
 
-    This class handles configuration of RabbitMQ connection parameters
-    including host, port, virtual host, credentials, and URL generation.
-    It supports environment variable parsing and property validation.
+    The Warren class is the core component of BunnyStream that manages RabbitMQ
+    connections, channels, and messaging operations. It provides a high-level
+    interface for both producing and consuming messages with automatic resource
+    management, connection monitoring, and robust error handling.
+
+    Key Features:
+        - Asynchronous RabbitMQ connection management
+        - Automatic queue declaration with quorum support
+        - Connection status monitoring and health checks
+        - Support for both producer and consumer modes
+        - Comprehensive error handling and logging
+        - Environment variable configuration support
+        - SSL/TLS connection support
+
+    Connection States:
+        The Warren instance can be in one of three connection states:
+        - 'not_initialized': No connection attempt made
+        - 'disconnected': Connection exists but is closed
+        - 'connected': Active connection to RabbitMQ
+
+    Attributes:
+        config (BunnyStreamConfig): Configuration object containing RabbitMQ parameters
+        logger: Instance logger for debugging and monitoring
+        is_connected (bool): True if actively connected to RabbitMQ
+        connection_status (str): Human-readable connection state
+        rabbit_connection: The underlying pika connection object
+        bunny_mode (str): Current operating mode ('producer' or 'consumer')
+
+    Examples:
+        Basic Producer Setup:
+            >>> from bunnystream import BunnyStreamConfig, Warren
+            >>> config = BunnyStreamConfig(mode="producer")
+            >>> warren = Warren(config)
+            >>> warren.connect()
+            >>> warren.start_io_loop()
+
+        Basic Consumer Setup:
+            >>> def message_handler(channel, method, properties, body):
+            ...     print(f"Received: {body.decode()}")
+            ...
+            >>> config = BunnyStreamConfig(mode="consumer")
+            >>> warren = Warren(config)
+            >>> warren.connect()
+            >>> warren.start_consuming(message_handler)
+            >>> warren.start_io_loop()
+
+        Connection Monitoring:
+            >>> warren = Warren(config)
+            >>> print(f"Connected: {warren.is_connected}")
+            >>> print(f"Status: {warren.connection_status}")
+            >>> info = warren.get_connection_info()
+            >>> print(f"Host: {info['host']}, Port: {info['port']}")
+
+        Publishing Messages:
+            >>> warren.publish(
+            ...     message='{"user_id": 123, "action": "login"}',
+            ...     exchange="user_events",
+            ...     topic="user.login"
+            ... )
+
+        Environment Configuration:
+            >>> import os
+            >>> os.environ['RABBITMQ_URL'] = 'amqp://user:pass@localhost:5672/vhost'
+            >>> config = BunnyStreamConfig()  # Automatically reads env vars
+            >>> warren = Warren(config)
+
+        SSL Connection:
+            >>> config = BunnyStreamConfig(
+            ...     rabbit_host="secure.rabbitmq.com",
+            ...     rabbit_port=5671,
+            ...     ssl=True,
+            ...     ssl_options={
+            ...         'cert_reqs': ssl.CERT_REQUIRED,
+            ...         'ca_certs': '/path/to/ca_bundle.crt'
+            ...     }
+            ... )
+            >>> warren = Warren(config)
+
+        Custom Subscription with Quorum Queues:
+            >>> from bunnystream import Subscription
+            >>> from pika.exchange_type import ExchangeType
+            >>>
+            >>> subscription = Subscription(
+            ...     exchange_name="orders",
+            ...     exchange_type=ExchangeType.topic,
+            ...     topic="order.created"
+            ... )
+            >>> config = BunnyStreamConfig(
+            ...     mode="consumer",
+            ...     subscriptions=[subscription]
+            ... )
+            >>> warren = Warren(config)
+            >>> # Queues are automatically declared with x-queue-type=quorum
+
+        Error Handling:
+            >>> try:
+            ...     warren.connect()
+            ...     warren.publish("test", "exchange", "topic")
+            ... except WarrenNotConnected as e:
+            ...     print(f"Connection error: {e}")
+            ... except BunnyStreamConfigurationError as e:
+            ...     print(f"Configuration error: {e}")
+
+        Connection Lifecycle Management:
+            >>> warren = Warren(config)
+            >>> warren.connect()  # Establish connection
+            >>> warren.start_io_loop()  # Start event loop (blocking)
+            >>> # In another thread/process:
+            >>> warren.stop_io_loop()  # Stop event loop
+            >>> warren.disconnect()  # Close connection
+
+    Notes:
+        - Warren uses pika's SelectConnection for asynchronous operations
+        - All queues are declared with 'x-queue-type=quorum' for high availability
+        - Connection parameters support all pika ConnectionParameters options
+        - The IO loop is blocking and should be run in a separate thread for non-blocking apps
+        - Connection callbacks handle automatic reconnection scenarios
+        - Message acknowledgment is handled automatically in consumer mode
+
+    Raises:
+        BunnyStreamConfigurationError: Invalid configuration parameters
+        WarrenNotConnected: Operations attempted without active connection
+
+    See Also:
+        BunnyStreamConfig: Configuration management class
+        Subscription: Queue subscription configuration
+        BaseEvent: Event publishing base class
+        BaseReceivedEvent: Event consumption helper class
     """
 
     def __init__(self, config: BunnyStreamConfig):

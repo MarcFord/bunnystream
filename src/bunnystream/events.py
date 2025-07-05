@@ -66,19 +66,161 @@ except (PackageNotFoundError, Exception):  # pylint: disable=broad-exception-cau
 
 class BaseEvent:
     """
-    A publishable event.
+    Base class for type-safe, publishable events with automatic metadata enrichment.
 
-    Example usage:
-        class MyEvent(Event):
-            TOPIC = "mytopic"
+    BaseEvent provides a robust foundation for creating event-driven applications with
+    RabbitMQ. It handles serialization, metadata enrichment, UUID support, and provides
+    a clean API for publishing events to message brokers.
 
-        event = MyEvent(x=1)
-        event.fire()
+    Key Features:
+        - Automatic metadata enrichment (timestamp, hostname, IP, OS info)
+        - JSON serialization with UUID support
+        - Type-safe event publishing
+        - Configurable exchange and routing key
+        - Dictionary-like access for event data
+        - Integration with Warren for message publishing
 
-    The sends a message with a message of '{"x":1}'.
+    Class Attributes:
+        TOPIC (str): Default routing key for messages (can be overridden per event)
+        EXCHANGE (str): Default exchange name (can be overridden per event)
+        EXCHANGE_TYPE (ExchangeType): Exchange type (default: topic)
 
-    Some additional attributes are included in the message under the
-    "_attributes" key.
+    Instance Attributes:
+        data (dict): Event payload data
+        _warren (Warren): Warren instance for publishing
+
+    Metadata Fields:
+        Events are automatically enriched with metadata under "_attributes":
+        - hostname: System hostname
+        - timestamp: UTC timestamp in ISO format
+        - host_ip: Host IP address
+        - operating_system: OS platform information
+        - bunnystream_version: BunnyStream library version
+
+    Examples:
+        Basic Event Publishing:
+            >>> from bunnystream import BaseEvent, Warren, BunnyStreamConfig
+            >>>
+            >>> class UserEvent(BaseEvent):
+            ...     EXCHANGE = "user_events"
+            ...     TOPIC = "user.created"
+            ...
+            >>> config = BunnyStreamConfig(mode="producer")
+            >>> warren = Warren(config)
+            >>> warren.connect()
+            >>>
+            >>> event = UserEvent(warren, user_id=123, email="user@example.com")
+            >>> event.fire()
+
+        Dynamic Topic and Exchange:
+            >>> event = UserEvent(warren, user_id=123)
+            >>> event.fire(topic="user.updated", exchange="user_updates")
+
+        Event with Complex Data:
+            >>> class OrderEvent(BaseEvent):
+            ...     EXCHANGE = "orders"
+            ...     TOPIC = "order.created"
+            ...
+            >>> order_data = {
+            ...     "order_id": "ORD-123",
+            ...     "customer": {"id": 456, "email": "customer@example.com"},
+            ...     "items": [{"sku": "ITEM-1", "quantity": 2, "price": 29.99}],
+            ...     "total": 59.98
+            ... }
+            >>> event = OrderEvent(warren, **order_data)
+            >>> event.fire()
+
+        Accessing Event Data:
+            >>> event = UserEvent(warren, user_id=123, name="John Doe")
+            >>> print(event["user_id"])  # 123
+            >>> print(event["name"])     # "John Doe"
+            >>> event["email"] = "john@example.com"  # Add new data
+
+        Event with UUID:
+            >>> import uuid
+            >>> event_id = uuid.uuid4()
+            >>> event = UserEvent(warren, event_id=event_id, user_id=123)
+            >>> # UUID is automatically converted to string in JSON
+
+        Serialization and Inspection:
+            >>> event = UserEvent(warren, user_id=123)
+            >>> json_str = event.serialize()  # Get JSON string
+            >>> print(event.json)  # Same as serialize()
+            >>>
+            >>> # JSON includes metadata:
+            >>> # {
+            >>> #   "user_id": 123,
+            >>> #   "_attributes": {
+            >>> #     "hostname": "server-01",
+            >>> #     "timestamp": "2025-01-01T12:00:00.000000+00:00",
+            >>> #     "host_ip": "192.168.1.100",
+            >>> #     "operating_system": "Linux-5.4.0",
+            >>> #     "bunnystream_version": "1.0.0"
+            >>> #   }
+            >>> # }
+
+        Error Handling:
+            >>> try:
+            ...     event = UserEvent(warren, user_id=123)
+            ...     event.fire()
+            ... except WarrenNotConfigured:
+            ...     print("Warren not properly configured")
+            ... except Exception as e:
+            ...     print(f"Publishing failed: {e}")
+
+        Custom Event with Validation:
+            >>> class ValidatedUserEvent(BaseEvent):
+            ...     EXCHANGE = "user_events"
+            ...     TOPIC = "user.created"
+            ...
+            ...     def __init__(self, warren, user_id, email, **kwargs):
+            ...         if not isinstance(user_id, int) or user_id <= 0:
+            ...             raise ValueError("user_id must be a positive integer")
+            ...         if "@" not in email:
+            ...             raise ValueError("email must be valid")
+            ...         super().__init__(warren, user_id=user_id, email=email, **kwargs)
+            ...
+            >>> event = ValidatedUserEvent(warren, user_id=123, email="user@example.com")
+
+        Event Inheritance:
+            >>> class BaseUserEvent(BaseEvent):
+            ...     EXCHANGE = "user_events"
+            ...
+            ...     def __init__(self, warren, user_id, **kwargs):
+            ...         super().__init__(warren, user_id=user_id, **kwargs)
+            ...         self["timestamp"] = self.get_current_timestamp()
+            ...
+            >>> class UserLoginEvent(BaseUserEvent):
+            ...     TOPIC = "user.login"
+            ...
+            >>> class UserLogoutEvent(BaseUserEvent):
+            ...     TOPIC = "user.logout"
+
+    Methods:
+        fire(topic=None, exchange=None, exchange_type=None): Publish the event
+        serialize(): Convert event to JSON string with metadata
+        get_current_timestamp(): Get current UTC timestamp
+        get_host_ip_address(): Get host IP address
+        get_os_info(): Get operating system information
+        set_metadata(): Add metadata to event (called automatically)
+
+    Notes:
+        - Events are immutable once published
+        - Metadata is added automatically before publishing
+        - UUID objects are converted to strings during serialization
+        - Warren instance must be connected before publishing
+        - Exchange and topic can be overridden at publish time
+        - All event data should be JSON-serializable
+
+    Raises:
+        WarrenNotConfigured: If Warren instance is None or not properly configured
+        ValueError: If event data contains non-serializable objects
+        TypeError: If required parameters are missing or invalid
+
+    See Also:
+        BaseReceivedEvent: For consuming and parsing received events
+        Warren: For connection and publishing management
+        BunnyStreamConfig: For configuration management
     """
 
     TOPIC = None
@@ -226,25 +368,188 @@ class BaseEvent:
 
 class BaseReceivedEvent:
     """
-    BaseReceivedEvent represents a base class for events received from a message broker.
+    Enhanced base class for convenient consumption and parsing of RabbitMQ messages.
 
-    Attributes:
-        EXCHANGE (str or None): The exchange to use for the event. Defaults to None
-                                (default exchange).
-        EXCHANGE_TYPE (ExchangeType): The type of exchange to use. Defaults to
-                                ExchangeType.topic.
+    BaseReceivedEvent provides a powerful and intuitive interface for consuming messages
+    from RabbitMQ queues. It automatically handles JSON parsing, provides both dictionary
+    and attribute-style access to message data, and supports nested data structures with
+    automatic DataObject wrapping.
 
-    Args:
-        data (Union[dict, str]): The event data, either as a dictionary or a JSON string.
+    Key Features:
+        - Automatic JSON parsing from string or bytes
+        - Dictionary-style access: event['key']
+        - Attribute-style access: event.key
+        - Nested data structure support with DataObject
+        - Flexible data input handling (dict, str, bytes)
+        - Comprehensive error handling for missing keys
+        - Raw data preservation for debugging
+
+    Data Access Patterns:
+        The class supports multiple ways to access message data:
+        - Dictionary access: event['user_id']
+        - Attribute access: event.user_id
+        - Nested access: event.user.profile.name (auto-wrapped in DataObject)
+        - Raw data access: event._raw_data (original string/bytes)
+
+    Class Attributes:
+        EXCHANGE (str, optional): Default exchange name (None for default exchange)
+        EXCHANGE_TYPE (ExchangeType): Exchange type for message routing (default: topic)
+
+    Instance Attributes:
+        data (dict): Parsed message data as dictionary
+        _raw_data (str): Original raw message data for debugging
+
+    Examples:
+        Basic Message Consumption:
+            >>> from bunnystream import BaseReceivedEvent
+            >>>
+            >>> def message_handler(channel, method, properties, body):
+            ...     event = BaseReceivedEvent(body)
+            ...     print(f"User: {event.user_id}")
+            ...     print(f"Email: {event.email}")
+            ...     print(f"Name: {event['name']}")  # Dictionary access
+            ...
+            >>> # Use with Warren consumer
+            >>> warren.start_consuming(message_handler)
+
+        JSON Message Parsing:
+            >>> json_message = '{"user_id": 123, "email": "user@example.com", "active": true}'
+            >>> event = BaseReceivedEvent(json_message)
+            >>> print(f"User ID: {event.user_id}")      # 123
+            >>> print(f"Email: {event.email}")          # user@example.com
+            >>> print(f"Active: {event.active}")        # True
+
+        Nested Data Access:
+            >>> nested_json = '''
+            ... {
+            ...     "user_id": 123,
+            ...     "profile": {
+            ...         "name": "John Doe",
+            ...         "address": {
+            ...             "street": "123 Main St",
+            ...             "city": "New York"
+            ...         }
+            ...     }
+            ... }
+            ... '''
+            >>> event = BaseReceivedEvent(nested_json)
+            >>> print(f"Name: {event.profile.name}")               # John Doe
+            >>> print(f"City: {event.profile.address.city}")       # New York
+            >>> print(f"Street: {event['profile']['address']['street']}")  # 123 Main St
+
+        Dictionary Data Input:
+            >>> data_dict = {"order_id": "ORD-456", "amount": 99.99, "items": []}
+            >>> event = BaseReceivedEvent(data_dict)
+            >>> print(f"Order: {event.order_id}")       # ORD-456
+            >>> print(f"Amount: ${event.amount}")       # $99.99
+
+        Error Handling:
+            >>> event = BaseReceivedEvent('{"user_id": 123}')
+            >>> try:
+            ...     missing_value = event.non_existent_field
+            ... except KeyError as e:
+            ...     print(f"Missing field: {e}")
+            ... except AttributeError as e:
+            ...     print(f"Attribute error: {e}")
+
+        Raw Data Access:
+            >>> event = BaseReceivedEvent('{"user_id": 123}')
+            >>> print(f"Raw data: {event._raw_data}")   # Original JSON string
+            >>> print(f"Parsed data: {event.data}")     # Python dict
+
+        Type Checking and Validation:
+            >>> def process_user_event(channel, method, properties, body):
+            ...     try:
+            ...         event = BaseReceivedEvent(body)
+            ...
+            ...         # Validate required fields
+            ...         if not hasattr(event, 'user_id'):
+            ...             raise ValueError("Missing user_id")
+            ...
+            ...         # Type checking
+            ...         if not isinstance(event.user_id, int):
+            ...             raise TypeError("user_id must be integer")
+            ...
+            ...         # Process the event
+            ...         print(f"Processing user {event.user_id}")
+            ...
+            ...     except (KeyError, TypeError, ValueError) as e:
+            ...         print(f"Event processing error: {e}")
+            ...         channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+            ...         return
+            ...
+            ...     # Acknowledge successful processing
+            ...     channel.basic_ack(delivery_tag=method.delivery_tag)
+
+        Integration with Warren Consumer:
+            >>> from bunnystream import Warren, BunnyStreamConfig, Subscription
+            >>> from pika.exchange_type import ExchangeType
+            >>>
+            >>> def handle_user_events(channel, method, properties, body):
+            ...     event = BaseReceivedEvent(body)
+            ...
+            ...     if hasattr(event, 'action'):
+            ...         if event.action == 'login':
+            ...             print(f"User {event.user_id} logged in")
+            ...         elif event.action == 'logout':
+            ...             print(f"User {event.user_id} logged out")
+            ...         else:
+            ...             print(f"Unknown action: {event.action}")
+            ...
+            >>> subscription = Subscription("user_events", ExchangeType.topic, "user.*")
+            >>> config = BunnyStreamConfig(mode="consumer", subscriptions=[subscription])
+            >>> warren = Warren(config)
+            >>> warren.start_consuming(handle_user_events)
+
+        Complex Data Processing:
+            >>> def process_order_event(channel, method, properties, body):
+            ...     event = BaseReceivedEvent(body)
+            ...
+            ...     # Access order details
+            ...     order_id = event.order_id
+            ...     customer = event.customer  # DataObject for nested data
+            ...
+            ...     # Calculate total from items
+            ...     total = sum(item.price * item.quantity for item in event.items)
+            ...
+            ...     # Process each item
+            ...     for item in event.items:
+            ...         print(f"Item: {item.name}, Price: ${item.price}")
+            ...
+            ...     print(f"Order {order_id} total: ${total}")
+            ...     print(f"Customer: {customer.name} ({customer.email})")
+
+        Metadata Access:
+            >>> # If the original event included metadata
+            >>> event = BaseReceivedEvent(body)
+            >>> if hasattr(event, '_meta_'):
+            ...     print(f"Event timestamp: {event._meta_.timestamp}")
+            ...     print(f"Source hostname: {event._meta_.hostname}")
+
+    Parameters:
+        data (Union[dict, str, bytes]): The event data to parse. Can be:
+            - dict: Python dictionary with event data
+            - str: JSON string to be parsed
+            - bytes: UTF-8 encoded JSON bytes to be parsed
 
     Raises:
-        TypeError: If the provided data is not a dictionary or a JSON string.
+        TypeError: If data is not a dictionary, string, or bytes
+        json.JSONDecodeError: If string/bytes data is not valid JSON
+        KeyError: If accessing a non-existent field via dictionary access
+        AttributeError: If accessing a non-existent field via attribute access
 
-    Methods:
-        __getitem__(item):
-            Allows dictionary-like access to the event data.
-            Raises KeyError if the item is not found in the data.
-            Raises TypeError if the event data is not a dictionary or is empty.
+    Notes:
+        - JSON parsing errors are handled gracefully, setting data to None
+        - Nested dictionaries are automatically wrapped in DataObject instances
+        - Raw data is preserved for debugging and reprocessing
+        - Both dictionary and attribute access styles are supported
+        - The class is designed for high-performance message processing
+        - Thread-safe for read operations (no shared mutable state)
+
+    See Also:
+        BaseEvent: For publishing events to RabbitMQ
+        DataObject: For accessing nested dictionary data
+        Warren: For connection and message management
     """
 
     EXCHANGE = None  # use the default exchange
@@ -282,14 +587,203 @@ class BaseReceivedEvent:
 
 class DataObject:
     """
-    DataObject is a simple class that allows for dynamic attribute assignment.
-    It can be used to create objects with attributes that can be set and accessed
-    like a dictionary.
+    Flexible data access object for nested dictionary structures with dual access patterns.
 
-    Example:
-        obj = DataObject()
-        obj.name = "example"
-        print(obj.name)  # Output: example
+    DataObject provides an elegant interface for accessing nested dictionary data using
+    both dictionary-style and attribute-style syntax. It automatically handles nested
+    structures by wrapping child dictionaries in DataObject instances, creating a
+    seamless access experience for complex data hierarchies.
+
+    Key Features:
+        - Dictionary-style access: obj['key']
+        - Attribute-style access: obj.key
+        - Automatic nesting: nested dicts become DataObject instances
+        - Type safety with comprehensive error handling
+        - Recursive data structure support
+        - Immutable data access (read-only)
+
+    Access Patterns:
+        DataObject supports multiple ways to access nested data:
+        - Direct access: obj.field_name
+        - Dictionary access: obj['field_name']
+        - Chained access: obj.user.profile.address.city
+        - Mixed access: obj['user'].profile['address'].city
+
+    Examples:
+        Basic Usage:
+            >>> data = {"name": "John", "age": 30, "active": True}
+            >>> obj = DataObject(data)
+            >>> print(obj.name)        # John
+            >>> print(obj['age'])      # 30
+            >>> print(obj.active)      # True
+
+        Nested Data Access:
+            >>> nested_data = {
+            ...     "user": {
+            ...         "id": 123,
+            ...         "profile": {
+            ...             "name": "Jane Doe",
+            ...             "contact": {
+            ...                 "email": "jane@example.com",
+            ...                 "phone": "+1-555-0123"
+            ...             }
+            ...         }
+            ...     }
+            ... }
+            >>> obj = DataObject(nested_data)
+            >>> print(obj.user.id)                           # 123
+            >>> print(obj.user.profile.name)                 # Jane Doe
+            >>> print(obj.user.profile.contact.email)        # jane@example.com
+            >>> print(obj['user']['profile']['contact']['phone'])  # +1-555-0123
+
+        Array/List Access:
+            >>> data_with_arrays = {
+            ...     "users": [
+            ...         {"name": "Alice", "role": "admin"},
+            ...         {"name": "Bob", "role": "user"}
+            ...     ],
+            ...     "metadata": {"total": 2}
+            ... }
+            >>> obj = DataObject(data_with_arrays)
+            >>> print(obj.users[0]['name'])       # Alice
+            >>> print(obj.users[1]['role'])       # user
+            >>> print(obj.metadata.total)         # 2
+
+        With BaseReceivedEvent:
+            >>> json_message = '''
+            ... {
+            ...     "order": {
+            ...         "id": "ORD-123",
+            ...         "customer": {
+            ...             "name": "John Smith",
+            ...             "address": {
+            ...                 "street": "123 Main St",
+            ...                 "city": "New York",
+            ...                 "zip": "10001"
+            ...             }
+            ...         },
+            ...         "items": [
+            ...             {"name": "Widget", "price": 19.99, "qty": 2},
+            ...             {"name": "Gadget", "price": 29.99, "qty": 1}
+            ...         ]
+            ...     }
+            ... }
+            ... '''
+            >>> event = BaseReceivedEvent(json_message)
+            >>> order = event.order  # Automatically becomes DataObject
+            >>> print(f"Order ID: {order.id}")
+            >>> print(f"Customer: {order.customer.name}")
+            >>> print(f"City: {order.customer.address.city}")
+            >>> print(f"ZIP: {order.customer.address.zip}")
+            >>>
+            >>> # Access items in the order
+            >>> for item in order.items:
+            ...     print(f"Item: {item['name']}, Price: ${item['price']}")
+
+        Error Handling:
+            >>> data = {"user": {"name": "John"}}
+            >>> obj = DataObject(data)
+            >>>
+            >>> # Accessing existing fields
+            >>> print(obj.user.name)  # John
+            >>>
+            >>> # Accessing non-existent fields
+            >>> try:
+            ...     missing = obj.user.email
+            ... except KeyError as e:
+            ...     print(f"Missing field: {e}")
+            >>>
+            >>> try:
+            ...     missing = obj['nonexistent']
+            ... except KeyError as e:
+            ...     print(f"Key not found: {e}")
+
+        Complex Data Processing:
+            >>> complex_data = {
+            ...     "analytics": {
+            ...         "metrics": {
+            ...             "pageviews": 1000,
+            ...             "unique_visitors": 750,
+            ...             "bounce_rate": 0.35
+            ...         },
+            ...         "demographics": {
+            ...             "age_groups": {
+            ...                 "18-24": 25,
+            ...                 "25-34": 40,
+            ...                 "35-44": 20,
+            ...                 "45+": 15
+            ...             }
+            ...         }
+            ...     }
+            ... }
+            >>> obj = DataObject(complex_data)
+            >>> metrics = obj.analytics.metrics
+            >>> print(f"Pageviews: {metrics.pageviews}")
+            >>> print(f"Bounce Rate: {metrics.bounce_rate:.1%}")
+            >>>
+            >>> # Access age group data
+            >>> age_groups = obj.analytics.demographics.age_groups
+            >>> for age_range, percentage in age_groups._data.items():
+            ...     print(f"Age {age_range}: {percentage}%")
+
+        Integration with Message Processing:
+            >>> def process_analytics_event(channel, method, properties, body):
+            ...     event = BaseReceivedEvent(body)
+            ...
+            ...     # Access nested analytics data
+            ...     analytics = event.analytics
+            ...
+            ...     # Process metrics
+            ...     if hasattr(analytics, 'metrics'):
+            ...         metrics = analytics.metrics
+            ...         print(f"Pageviews: {metrics.pageviews}")
+            ...         print(f"Visitors: {metrics.unique_visitors}")
+            ...
+            ...     # Process demographics
+            ...     if hasattr(analytics, 'demographics'):
+            ...         demo = analytics.demographics
+            ...         if hasattr(demo, 'age_groups'):
+            ...             age_data = demo.age_groups
+            ...             # Process age group data...
+
+        Type Checking and Validation:
+            >>> def validate_user_data(data_obj):
+            ...     try:
+            ...         # Check required fields
+            ...         user_id = data_obj.user_id
+            ...         username = data_obj.username
+            ...
+            ...         # Validate profile if present
+            ...         if hasattr(data_obj, 'profile'):
+            ...             profile = data_obj.profile
+            ...             if hasattr(profile, 'email'):
+            ...                 email = profile.email
+            ...                 if '@' not in email:
+            ...                     raise ValueError("Invalid email format")
+            ...
+            ...         return True
+            ...     except (KeyError, AttributeError) as e:
+            ...         print(f"Validation error: {e}")
+            ...         return False
+
+    Parameters:
+        data (dict): Dictionary data to wrap. Must be a valid Python dictionary.
+
+    Raises:
+        TypeError: If data is not a dictionary
+        KeyError: If accessing a non-existent key via dictionary or attribute access
+
+    Notes:
+        - DataObject instances are immutable (read-only access)
+        - Nested dictionaries are automatically wrapped in DataObject instances
+        - List/array elements are returned as-is (not wrapped)
+        - The _data attribute provides access to the underlying dictionary
+        - Thread-safe for read operations (no shared mutable state)
+        - Designed for high-performance nested data access
+
+    See Also:
+        BaseReceivedEvent: Primary consumer of DataObject for message parsing
+        BaseEvent: For publishing structured events
     """
 
     def __init__(self, data: dict) -> None:

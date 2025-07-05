@@ -73,21 +73,231 @@ VALID_MODES = [BUNNYSTREAM_MODE_PRODUCER, BUNNYSTREAM_MODE_CONSUMER]
 
 class BunnyStreamConfig:
     """
-    Configuration class for BunnyStream RabbitMQ connections.
+    Comprehensive Configuration Management for BunnyStream RabbitMQ Connections.
 
-    This class manages all aspects of RabbitMQ connection configuration including
-    connection parameters, subscriptions, SSL settings, and advanced options.
-    It supports both producer and consumer modes and can parse configuration
-    from environment variables.
+    BunnyStreamConfig provides a centralized, flexible configuration system for all
+    RabbitMQ connection parameters, subscription management, and advanced networking
+    options. It supports automatic environment variable parsing, SSL/TLS configuration,
+    and both producer and consumer operation modes.
 
-    Args:
-        mode: The operation mode ("producer" or "consumer")
-        exchange_name: Name of the RabbitMQ exchange
-        rabbit_host: RabbitMQ server hostname
-        rabbit_port: RabbitMQ server port
-        rabbit_vhost: RabbitMQ virtual host
-        rabbit_user: Username for authentication
-        rabbit_pass: Password for authentication
+    Key Features:
+        - Environment variable auto-configuration with RABBITMQ_URL support
+        - Complete SSL/TLS configuration options
+        - Advanced connection parameters (timeouts, retries, limits)
+        - Subscription management for exchanges and queues
+        - Input validation and type checking
+        - Producer and consumer mode support
+        - TCP socket option configuration
+
+    Environment Variables:
+        Primary Configuration:
+            RABBITMQ_URL: Complete connection string (amqp://user:pass@host:port/vhost)
+            RABBIT_HOST: RabbitMQ hostname (default: localhost)
+            RABBIT_PORT: RabbitMQ port (default: 5672)
+            RABBIT_USER: Authentication username (default: guest)
+            RABBIT_PASS: Authentication password (default: guest)
+            RABBIT_VHOST: Virtual host (default: /)
+
+        SSL Configuration:
+            RABBIT_SSL: Enable SSL (true/false, default: false)
+            RABBIT_SSL_PORT: SSL port (default: 5671)
+
+        Advanced Parameters:
+            RABBIT_CHANNEL_MAX: Maximum channels per connection (default: 65535)
+            RABBIT_FRAME_MAX: Maximum frame size (default: 131072)
+            RABBIT_HEARTBEAT: Heartbeat interval in seconds (default: None)
+            RABBIT_PREFETCH_COUNT: Consumer prefetch count (default: 2)
+            RABBIT_CONNECTION_ATTEMPTS: Connection retry attempts (default: 2)
+            RABBIT_RETRY_DELAY: Delay between retries in seconds (default: 2.0)
+            RABBIT_SOCKET_TIMEOUT: Socket timeout (default: None)
+            RABBIT_STACK_TIMEOUT: Stack timeout (default: None)
+            RABBIT_BLOCKED_CONNECTION_TIMEOUT: Blocked connection timeout
+            RABBIT_TCP_OPTIONS: TCP options as JSON string
+            RABBIT_LOCALE: Connection locale (default: en_US)
+
+    Parameters:
+        mode (str): Operation mode - "producer" or "consumer"
+        exchange_name (str, optional): Default exchange name
+        rabbit_host (str, optional): RabbitMQ hostname
+        rabbit_port (int, optional): RabbitMQ port
+        rabbit_vhost (str, optional): Virtual host
+        rabbit_user (str, optional): Authentication username
+        rabbit_pass (str, optional): Authentication password
+        subscriptions (list, optional): List of Subscription objects
+        prefetch_count (int, optional): Consumer prefetch count
+        ssl (bool, optional): Enable SSL/TLS
+        ssl_options (dict, optional): SSL configuration options
+        **kwargs: Additional advanced parameters
+
+    Properties:
+        Connection Properties:
+            rabbit_host, rabbit_port, rabbit_vhost, rabbit_user, rabbit_pass
+            url: Complete connection URL
+            connection_parameters: Pika-compatible parameters dict
+
+        Subscription Management:
+            subscriptions: List of subscription configurations
+            subscription_mappings: Exchange name to subscription mapping
+            exchange_name: Default exchange name
+
+        Advanced Configuration:
+            prefetch_count, channel_max, frame_max, heartbeat
+            connection_attempts, retry_delay, socket_timeout
+            blocked_connection_timeout, stack_timeout
+            tcp_options, ssl_options, locale
+
+    Examples:
+        Basic Configuration:
+            >>> config = BunnyStreamConfig(mode="producer")
+            >>> print(f"Host: {config.rabbit_host}")  # localhost
+            >>> print(f"Port: {config.rabbit_port}")  # 5672
+
+        Environment-based Configuration:
+            >>> import os
+            >>> os.environ['RABBIT_HOST'] = 'rabbitmq.example.com'
+            >>> os.environ['RABBIT_USER'] = 'myuser'
+            >>> os.environ['RABBIT_PASS'] = 'mypassword'
+            >>> config = BunnyStreamConfig(mode="consumer")
+            >>> # Automatically uses environment values
+
+        URL-based Configuration:
+            >>> os.environ['RABBITMQ_URL'] = 'amqp://user:pass@host:5672/prod'
+            >>> config = BunnyStreamConfig(mode="producer")
+            >>> print(config.rabbit_host)  # host
+            >>> print(config.rabbit_vhost)  # prod
+
+        SSL Configuration:
+            >>> import ssl
+            >>> config = BunnyStreamConfig(
+            ...     mode="producer",
+            ...     rabbit_host="secure.rabbit.com",
+            ...     ssl=True,
+            ...     ssl_port=5671,
+            ...     ssl_options={
+            ...         'cert_reqs': ssl.CERT_REQUIRED,
+            ...         'ca_certs': '/path/to/ca_bundle.crt',
+            ...         'certfile': '/path/to/client.crt',
+            ...         'keyfile': '/path/to/client.key'
+            ...     }
+            ... )
+
+        Advanced Configuration:
+            >>> config = BunnyStreamConfig(
+            ...     mode="consumer",
+            ...     prefetch_count=10,
+            ...     heartbeat=30,
+            ...     connection_attempts=5,
+            ...     retry_delay=5.0,
+            ...     channel_max=1000,
+            ...     frame_max=65536
+            ... )
+
+        Custom Subscriptions:
+            >>> from bunnystream import Subscription
+            >>> from pika.exchange_type import ExchangeType
+            >>>
+            >>> subscriptions = [
+            ...     Subscription("users", ExchangeType.topic, "user.*"),
+            ...     Subscription("orders", ExchangeType.direct, "order.created"),
+            ...     Subscription("notifications", ExchangeType.fanout, "")
+            ... ]
+            >>> config = BunnyStreamConfig(
+            ...     mode="consumer",
+            ...     subscriptions=subscriptions
+            ... )
+
+        TCP Options Configuration:
+            >>> tcp_opts = {
+            ...     'TCP_KEEPIDLE': 600,
+            ...     'TCP_KEEPINTVL': 30,
+            ...     'TCP_KEEPCNT': 3
+            ... }
+            >>> config = BunnyStreamConfig(
+            ...     mode="producer",
+            ...     tcp_options=tcp_opts
+            ... )
+
+        Dynamic Configuration Updates:
+            >>> config = BunnyStreamConfig(mode="producer")
+            >>> config.rabbit_host = "new-host.example.com"
+            >>> config.rabbit_port = 5673
+            >>> config.prefetch_count = 20
+
+        Configuration Validation:
+            >>> try:
+            ...     config = BunnyStreamConfig(mode="invalid_mode")
+            ... except BunnyStreamModeError as e:
+            ...     print(f"Invalid mode: {e}")
+            >>>
+            >>> try:
+            ...     config = BunnyStreamConfig(mode="producer")
+            ...     config.rabbit_port = "invalid"
+            ... except RabbitPortError as e:
+            ...     print(f"Invalid port: {e}")
+
+        Subscription Management:
+            >>> config = BunnyStreamConfig(mode="consumer")
+            >>> subscription = Subscription("events", ExchangeType.topic, "event.*")
+            >>> config.add_subscription(subscription)
+            >>>
+            >>> # Access subscription mappings
+            >>> mappings = config.subscription_mappings
+            >>> print(mappings["events"])  # Subscription object
+
+        Configuration Inspection:
+            >>> config = BunnyStreamConfig(mode="producer")
+            >>> print(f"Mode: {config.mode}")
+            >>> print(f"URL: {config.url}")
+            >>> print(f"SSL Enabled: {config.ssl}")
+            >>>
+            >>> # Get all connection parameters
+            >>> params = config.connection_parameters
+            >>> print(f"Parameters: {params}")
+
+        Environment Override Example:
+            >>> # Constructor parameters override environment
+            >>> os.environ['RABBIT_HOST'] = 'env-host.com'
+            >>> config = BunnyStreamConfig(
+            ...     mode="producer",
+            ...     rabbit_host="override-host.com"  # This takes precedence
+            ... )
+            >>> print(config.rabbit_host)  # override-host.com
+
+    Validation Rules:
+        Mode: Must be "producer" or "consumer"
+        Port: Must be integer between 1 and 65535
+        Host: Must be non-empty string without protocol prefix
+        VHost: Must start with "/" or be root "/"
+        Credentials: Must be non-empty strings
+        Prefetch Count: Must be positive integer (consumer mode)
+        Frame Max: Must be between 4096 and 131072
+        Channel Max: Must be between 1 and 65535
+        Timeouts: Must be positive numbers or None
+
+    Notes:
+        - Environment variables are parsed only once during initialization
+        - Constructor parameters always override environment variables
+        - SSL is automatically enabled if ssl_options are provided
+        - RABBITMQ_URL format: amqp[s]://[user[:pass]@]host[:port][/vhost]
+        - Default subscription is created if none provided
+        - All timeout values are in seconds
+        - TCP options must be valid socket options for the platform
+
+    Raises:
+        BunnyStreamModeError: Invalid operation mode
+        RabbitHostError: Invalid hostname
+        RabbitPortError: Invalid port number
+        RabbitVHostError: Invalid virtual host
+        RabbitCredentialsError: Invalid username/password
+        PrefetchCountError: Invalid prefetch count
+        SSLOptionsError: Invalid SSL configuration
+        InvalidTCPOptionsError: Invalid TCP options
+        SubscriptionsNotSetError: Missing subscription configuration
+
+    See Also:
+        Warren: Uses BunnyStreamConfig for connection management
+        Subscription: Defines queue and exchange configurations
+        BaseEvent: Uses exchange_name from configuration
     """
 
     def __init__(
@@ -195,7 +405,8 @@ class BunnyStreamConfig:
             # Validate scheme
             if parsed.scheme not in ["amqp", "amqps"]:
                 raise ValueError(
-                    f"Invalid URL scheme '{parsed.scheme}'. " "Expected 'amqp' or 'amqps'."
+                    f"Invalid URL scheme '{parsed.scheme}'. "
+                    "Expected 'amqp' or 'amqps'."
                 )
 
             # Extract components
@@ -533,7 +744,9 @@ class BunnyStreamConfig:
             - Debug: The current (masked) password value.
         """
         if self._rabbit_pass is None:
-            self.logger.info("Rabbit password is not set, using default password 'guest'.")
+            self.logger.info(
+                "Rabbit password is not set, using default password 'guest'."
+            )
             self._rabbit_pass = DEFAULT_PASS
         if not isinstance(self._rabbit_pass, str):
             raise RabbitCredentialsError("Rabbit password must be a string.")
@@ -652,9 +865,13 @@ class BunnyStreamConfig:
         if not isinstance(value, int):
             raise ValueError("Frame max must be an integer.")
         if value <= FRAME_MIN_SIZE:
-            raise ValueError(f"Min AMQP 0.9.1 Frame Size is {FRAME_MIN_SIZE}, but got {value!r}")
+            raise ValueError(
+                f"Min AMQP 0.9.1 Frame Size is {FRAME_MIN_SIZE}, but got {value!r}"
+            )
         if value > FRAME_MAX_SIZE:
-            raise ValueError(f"Max AMQP 0.9.1 Frame Size is {FRAME_MAX_SIZE}, but got {value!r}")
+            raise ValueError(
+                f"Max AMQP 0.9.1 Frame Size is {FRAME_MAX_SIZE}, but got {value!r}"
+            )
         self.logger.debug("Setting frame max to: %s", value)
         self._frame_max = value
 
@@ -685,7 +902,9 @@ class BunnyStreamConfig:
                     DEFAULT_HEARTBEAT_TIMEOUT,
                 )
                 return DEFAULT_HEARTBEAT_TIMEOUT
-        self.logger.debug("Using default heartbeat timeout: %s", DEFAULT_HEARTBEAT_TIMEOUT)
+        self.logger.debug(
+            "Using default heartbeat timeout: %s", DEFAULT_HEARTBEAT_TIMEOUT
+        )
         return DEFAULT_HEARTBEAT_TIMEOUT
 
     @heartbeat.setter
@@ -763,11 +982,15 @@ class BunnyStreamConfig:
             ValueError: If the provided value is not a non-negative float.
         """
         if value is None:
-            self.logger.debug("Setting blocked connection timeout to None (no timeout).")
+            self.logger.debug(
+                "Setting blocked connection timeout to None (no timeout)."
+            )
             self._blocked_connection_timeout = None
             return
         if not isinstance(value, (int, float)):
-            raise ValueError("Blocked connection timeout must be a float or an integer.")
+            raise ValueError(
+                "Blocked connection timeout must be a float or an integer."
+            )
         if value < 0:
             raise ValueError("Blocked connection timeout must be a non-negative float.")
         self.logger.debug("Setting blocked connection timeout to: %s", value)
@@ -785,7 +1008,9 @@ class BunnyStreamConfig:
             int: The number of connection attempts.
         """
         if self._connection_attempts is not None:
-            self.logger.debug("Using internal connection attempts: %s", self._connection_attempts)
+            self.logger.debug(
+                "Using internal connection attempts: %s", self._connection_attempts
+            )
             return self._connection_attempts
         # Check environment variable for connection attempts
         connection_attempts = os.getenv("RABBITMQ_CONNECTION_ATTEMPTS")
@@ -800,7 +1025,9 @@ class BunnyStreamConfig:
                     DEFAULT_CONNECTION_ATTEMPTS,
                 )
                 return DEFAULT_CONNECTION_ATTEMPTS
-        self.logger.debug("Using default connection attempts: %s", DEFAULT_CONNECTION_ATTEMPTS)
+        self.logger.debug(
+            "Using default connection attempts: %s", DEFAULT_CONNECTION_ATTEMPTS
+        )
         return DEFAULT_CONNECTION_ATTEMPTS
 
     @connection_attempts.setter
@@ -989,7 +1216,9 @@ class BunnyStreamConfig:
                 self.tcp_options = tcp_options  # Use setter to validate
                 return tcp_options
             except json.JSONDecodeError as e:
-                self.logger.error("Invalid RABBITMQ_TCP_OPTIONS JSON format: %s", str(e))
+                self.logger.error(
+                    "Invalid RABBITMQ_TCP_OPTIONS JSON format: %s", str(e)
+                )
                 return None
             except InvalidTCPOptionsError as e:
                 self.logger.error("Invalid TCP options: %s", str(e))
@@ -1161,7 +1390,9 @@ class BunnyStreamConfig:
             self.locale = locale  # Use setter to validate
             self.logger.debug("Using RABBITMQ_LOCALE from environment: %s", locale)
         except ValueError:
-            self.logger.error("Invalid RABBITMQ_LOCALE value, using default: %s", DEFAULT_LOCALE)
+            self.logger.error(
+                "Invalid RABBITMQ_LOCALE value, using default: %s", DEFAULT_LOCALE
+            )
             locale = DEFAULT_LOCALE
         self.logger.debug("Using RabbitMQ locale: %s", locale)
         return locale
@@ -1264,7 +1495,9 @@ class BunnyStreamConfig:
             raise SubscriptionsNotSetError("Subscriptions have not been set.")
         for subscription in self._subscriptions:
             if subscription.exchange_name == exchange_name:
-                self.logger.debug("Removing subscription for exchange: %s", exchange_name)
+                self.logger.debug(
+                    "Removing subscription for exchange: %s", exchange_name
+                )
                 self._subscriptions.remove(subscription)
                 self._subscription_mappings.pop(exchange_name, None)
                 return
@@ -1294,6 +1527,7 @@ class BunnyStreamConfig:
         if invalid_keys:
             self.logger.error("Invalid TCP options provided: %s", invalid_keys)
             raise InvalidTCPOptionsError(
-                f"Invalid TCP options: {invalid_keys}. " f"Valid options are: {valid_keys}"
+                f"Invalid TCP options: {invalid_keys}. "
+                f"Valid options are: {valid_keys}"
             )
         self.logger.debug("TCP options validated successfully: %s", options)
