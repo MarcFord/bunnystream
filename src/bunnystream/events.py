@@ -383,6 +383,7 @@ class BaseReceivedEvent:
         - Flexible data input handling (dict, str, bytes)
         - Comprehensive error handling for missing keys
         - Raw data preservation for debugging
+        - Manual message acknowledgment with ack_event()
 
     Data Access Patterns:
         The class supports multiple ways to access message data:
@@ -398,6 +399,8 @@ class BaseReceivedEvent:
     Instance Attributes:
         data (dict): Parsed message data as dictionary
         _raw_data (str): Original raw message data for debugging
+        _channel (Any): RabbitMQ channel object for acknowledgment (if provided)
+        _method (Any): RabbitMQ method object with delivery information (if provided)
 
     Examples:
         Basic Message Consumption:
@@ -411,6 +414,28 @@ class BaseReceivedEvent:
             ...
             >>> # Use with Warren consumer
             >>> warren.start_consuming(message_handler)
+
+        Manual Message Acknowledgment:
+            >>> from bunnystream import BaseReceivedEvent
+            >>>
+            >>> def manual_ack_handler(channel, method, properties, body):
+            ...     # Create event with channel and method for manual ack
+            ...     event = BaseReceivedEvent(body, channel, method)
+            ...     
+            ...     try:
+            ...         # Process the message
+            ...         user_id = event.user_id
+            ...         process_user_data(user_id)
+            ...         
+            ...         # Manually acknowledge after successful processing
+            ...         event.ack_event()
+            ...         print(f"✅ User {user_id} processed and acknowledged")
+            ...     except Exception as e:
+            ...         print(f"❌ Processing failed: {e}")
+            ...         # Don't acknowledge - message will be redelivered
+            ...
+            >>> # Use with Warren consumer (set auto_ack=False)
+            >>> warren.start_consuming(manual_ack_handler)
 
         JSON Message Parsing:
             >>> json_message = '{"user_id": 123, "email": "user@example.com", "active": true}'
@@ -531,6 +556,10 @@ class BaseReceivedEvent:
             - dict: Python dictionary with event data
             - str: JSON string to be parsed
             - bytes: UTF-8 encoded JSON bytes to be parsed
+        channel (Any, optional): RabbitMQ channel object for manual acknowledgment.
+            Required for ack_event() functionality.
+        method (Any, optional): RabbitMQ method object containing delivery information.
+            Required for ack_event() functionality.
 
     Raises:
         TypeError: If data is not a dictionary, string, or bytes
@@ -555,7 +584,7 @@ class BaseReceivedEvent:
     EXCHANGE = None  # use the default exchange
     EXCHANGE_TYPE = ExchangeType.topic  # use the default topic
 
-    def __init__(self, data: Union[dict, str]) -> None:
+    def __init__(self, data: Union[dict, str], channel: Any = None, method: Any = None) -> None:
         if isinstance(data, str):
             self._raw_data = data
             # Attempt to parse the string as JSON
@@ -568,6 +597,10 @@ class BaseReceivedEvent:
             self.data = data
         else:
             raise TypeError("Data must be a dictionary or a JSON string.")
+        
+        # Store channel and method for manual acknowledgment
+        self._channel = channel
+        self._method = method
 
     def __getitem__(self, item: Any) -> Any:
         if self.data is not None and isinstance(self.data, dict):
@@ -583,6 +616,87 @@ class BaseReceivedEvent:
         Allows attribute-like access to the event data.
         """
         return self.__getitem__(item)
+
+    def ack_event(self) -> None:
+        """
+        Manually acknowledge the received event.
+
+        This method sends an acknowledgment to RabbitMQ indicating that the message
+        has been successfully processed. The message will be removed from the queue
+        and will not be redelivered.
+
+        This is useful when you want to control acknowledgment manually instead of
+        relying on automatic acknowledgment in the message handler.
+
+        Examples:
+            Basic Manual Acknowledgment:
+                >>> def message_handler(channel, method, properties, body):
+                ...     event = BaseReceivedEvent(body, channel, method)
+                ...     
+                ...     try:
+                ...         # Process the message
+                ...         print(f"Processing user {event.user_id}")
+                ...         # ... business logic here ...
+                ...         
+                ...         # Acknowledge after successful processing
+                ...         event.ack_event()
+                ...     except Exception as e:
+                ...         print(f"Processing failed: {e}")
+                ...         # Don't acknowledge - let message be redelivered
+
+            Conditional Acknowledgment:
+                >>> def selective_handler(channel, method, properties, body):
+                ...     event = BaseReceivedEvent(body, channel, method)
+                ...     
+                ...     if event.priority == 'high':
+                ...         # Process high priority immediately
+                ...         process_high_priority(event)
+                ...         event.ack_event()
+                ...     else:
+                ...         # Queue low priority for later processing
+                ...         queue_for_later(event)
+                ...         event.ack_event()
+
+            Error Handling with Manual Ack:
+                >>> def robust_handler(channel, method, properties, body):
+                ...     event = BaseReceivedEvent(body, channel, method)
+                ...     
+                ...     try:
+                ...         result = process_event(event)
+                ...         if result.success:
+                ...             event.ack_event()
+                ...             print("✅ Message processed and acknowledged")
+                ...         else:
+                ...             # Don't ack - let it be redelivered
+                ...             print("❌ Processing failed - message will be redelivered")
+                ...     except Exception as e:
+                ...         print(f"Error: {e} - message will be redelivered")
+
+        Raises:
+            RuntimeError: If the event was not created with channel and method information
+            Exception: If the acknowledgment fails due to connection issues
+
+        Notes:
+            - This method can only be called once per event
+            - The channel and method must be provided when creating the BaseReceivedEvent
+            - After acknowledgment, the message is permanently removed from the queue
+            - If acknowledgment fails, the message may be redelivered depending on RabbitMQ settings
+            - For automatic acknowledgment, don't call this method and let Warren handle it
+
+        See Also:
+            nack_event(): For negative acknowledgment with optional requeue
+            reject_event(): For rejecting a message without requeue
+        """
+        if self._channel is None or self._method is None:
+            raise RuntimeError(
+                "Cannot acknowledge event: channel and method information not available. "
+                "Make sure to pass channel and method when creating BaseReceivedEvent."
+            )
+        
+        try:
+            self._channel.basic_ack(delivery_tag=self._method.delivery_tag)
+        except Exception as e:
+            raise RuntimeError(f"Failed to acknowledge message: {e}") from e
 
 
 class DataObject:
