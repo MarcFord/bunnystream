@@ -35,7 +35,7 @@ class EventWithoutConfigForTesting(BaseEvent):
 class EventForTestingWithBadTopic(BaseEvent):
     """Event class for testing BaseEvent functionality."""
 
-    TOPIC = 1
+    TOPIC = None  # type: ignore
     EXCHANGE = "test_exchange"
     EXCHANGE_TYPE = ExchangeType.direct
 
@@ -76,7 +76,9 @@ class TestBaseEvent:
         """Test json property returns serialized data."""
         event = EventForTesting(warren=self.warren, test_key="test_value")
 
-        with patch.object(event, "serialize", return_value='{"test": "data"}') as mock_serialize:
+        with patch.object(
+            event, "serialize", return_value='{"test": "data"}'
+        ) as mock_serialize:
             result = event.json
 
             mock_serialize.assert_called_once()
@@ -164,7 +166,9 @@ class TestBaseEvent:
             "bunnystream": {"topic": "dynamic.topic", "type": ExchangeType.topic}
         }
 
-        event = EventForTestingWithBadExchangeType(warren=self.warren, test_key="test_value")
+        event = EventForTestingWithBadExchangeType(
+            warren=self.warren, test_key="test_value"
+        )
 
         with patch.object(event, "serialize", return_value='{"test": "data"}'):
             event.fire()
@@ -348,6 +352,80 @@ class TestBaseEvent:
         event1["new_key"] = "new_value1"
         assert "new_key" not in event2.data
 
+    def test_serialize_uuid_convert_function_coverage(self):
+        """Test the uuid_convert function inside serialize method."""
+        from datetime import datetime
+
+        # Test with UUID (should hit line 268: return o.hex)
+        event = BaseEvent(
+            warren=self.warren, uuid_val=UUID("12345678-1234-5678-1234-567812345678")
+        )
+
+        # Test with non-serializable object (should hit the return str(o) branch)
+        event.data["datetime_val"] = datetime(2023, 1, 1, 12, 0, 0)
+
+        json_str = event.serialize()
+        data = json.loads(json_str)
+
+        # UUID should be hex
+        assert data["uuid_val"] == "12345678123456781234567812345678"
+        # datetime should be string representation
+        assert "2023-01-01 12:00:00" in data["datetime_val"]
+
+    def test_fire_with_invalid_topic_type(self):
+        """Test fire method when TOPIC is not a string."""
+
+        class BadTopicEvent(BaseEvent):
+            TOPIC = None  # Will be set to invalid value
+            EXCHANGE = "test"
+
+        event = BadTopicEvent(warren=self.warren, test="data")
+        event.TOPIC = 123  # type: ignore # Make TOPIC invalid (line 297)
+
+        with pytest.raises(ValueError, match="TOPIC must be a string"):
+            event.fire()
+
+    def test_fire_with_invalid_exchange_type_attribute(self):
+        """Test fire method when EXCHANGE_TYPE is somehow invalid after validation."""
+        # This line might be unreachable in normal circumstances due to the fallback logic,
+        # but we'll try to test it by creating a very specific scenario
+
+        class TestEvent(BaseEvent):
+            TOPIC = "test.topic"
+            EXCHANGE = "test_exchange"
+            EXCHANGE_TYPE = ExchangeType.topic
+
+        event = TestEvent(warren=self.warren, test="data")
+
+        # Create a mock object that looks like ExchangeType but isn't
+        class FakeExchangeType:
+            pass
+
+        # Monkey patch the isinstance function temporarily to test the validation
+        original_isinstance = __builtins__["isinstance"]
+
+        def patched_isinstance(obj, type_or_tuple):
+            # For the first call (in the initial if condition), return True
+            # For the second call (the validation), return False to trigger the error
+            if obj is event.EXCHANGE_TYPE and type_or_tuple is ExchangeType:
+                # Use a counter to differentiate between calls
+                if not hasattr(patched_isinstance, "call_count"):
+                    patched_isinstance.call_count = 0
+                patched_isinstance.call_count += 1
+
+                # Return True for the first check (so we skip the fallback logic)
+                # Return False for the second check (to trigger the validation error)
+                return patched_isinstance.call_count == 1
+
+            return original_isinstance(obj, type_or_tuple)
+
+        try:
+            __builtins__["isinstance"] = patched_isinstance
+            with pytest.raises(ValueError, match="EXCHANGE_TYPE should be valid"):
+                event.fire()
+        finally:
+            __builtins__["isinstance"] = original_isinstance
+
 
 class TestBaseReceivedEvent:
     """Test suite for BaseReceivedEvent class."""
@@ -389,13 +467,19 @@ class TestBaseReceivedEvent:
 
     def test_init_with_invalid_data_type(self):
         """Test BaseReceivedEvent initialization with invalid data type."""
-        with pytest.raises(TypeError, match="Data must be a dictionary or a JSON string."):
+        with pytest.raises(
+            TypeError, match="Data must be a dictionary or a JSON string."
+        ):
             BaseReceivedEvent(123)  # type: ignore
 
-        with pytest.raises(TypeError, match="Data must be a dictionary or a JSON string."):
+        with pytest.raises(
+            TypeError, match="Data must be a dictionary or a JSON string."
+        ):
             BaseReceivedEvent([1, 2, 3])  # type: ignore
 
-        with pytest.raises(TypeError, match="Data must be a dictionary or a JSON string."):
+        with pytest.raises(
+            TypeError, match="Data must be a dictionary or a JSON string."
+        ):
             BaseReceivedEvent(None)  # type: ignore
 
     def test_getitem_with_valid_key(self):
@@ -412,7 +496,9 @@ class TestBaseReceivedEvent:
         test_data = {"key": "value"}
         event = BaseReceivedEvent(test_data)
 
-        with pytest.raises(KeyError, match="Key 'nonexistent' not found in event data."):
+        with pytest.raises(
+            KeyError, match="Key 'nonexistent' not found in event data."
+        ):
             event["nonexistent"]
 
     def test_getitem_with_nested_dict(self):
@@ -440,7 +526,9 @@ class TestBaseReceivedEvent:
         """Test __getitem__ when data is None or empty."""
         event = BaseReceivedEvent("invalid json")
 
-        with pytest.raises(TypeError, match="Event data is not a dictionary or is empty."):
+        with pytest.raises(
+            TypeError, match="Event data is not a dictionary or is empty."
+        ):
             event["any_key"]
 
     def test_getattr_access(self):
@@ -720,7 +808,9 @@ class TestBaseReceivedEventIntegration:
             assert event._raw_data == malformed_json
 
             # Should raise TypeError when trying to access data
-            with pytest.raises(TypeError, match="Event data is not a dictionary or is empty."):
+            with pytest.raises(
+                TypeError, match="Event data is not a dictionary or is empty."
+            ):
                 event["any_key"]
 
         # Valid JSON but not dictionaries - these parse successfully
@@ -738,5 +828,204 @@ class TestBaseReceivedEventIntegration:
             assert event._raw_data == json_str
 
             # Should raise TypeError when trying to access as dict
-            with pytest.raises(TypeError, match="Event data is not a dictionary or is empty."):
+            with pytest.raises(
+                TypeError, match="Event data is not a dictionary or is empty."
+            ):
                 event["any_key"]
+
+
+class TestBaseEventCoverageEdgeCases:
+    """Test edge cases for BaseEvent to improve coverage."""
+
+    def setup_method(self):
+        """Set up test fixtures before each test method."""
+        self.config = BunnyStreamConfig(mode="producer")
+        self.warren = Mock(spec=Warren)
+        self.warren.config = self.config
+
+    def test_json_property_with_uuid(self):
+        """Test JSON serialization with UUID objects via the uuid_convert function."""
+        event = BaseEvent(
+            warren=self.warren, id=UUID("12345678-1234-5678-1234-567812345678")
+        )
+
+        # Also test with a nested structure to make sure uuid_convert is called
+        event.data["nested"] = {
+            "uuid_field": UUID("87654321-4321-8765-4321-876543218765")
+        }
+
+        json_str = event.json
+        data = json.loads(json_str)
+        # UUID should be converted to hex string (this tests line 268)
+        assert data["id"] == "12345678123456781234567812345678"
+        assert data["nested"]["uuid_field"] == "87654321432187654321876543218765"
+
+    def test_fire_with_invalid_topic_type(self):
+        """Test fire method when TOPIC is not a string (line 297)."""
+
+        class TestEvent(BaseEvent):
+            TOPIC = "valid.topic"  # Start with valid
+            EXCHANGE = "test_exchange"  # Set exchange so we skip fallback logic
+            EXCHANGE_TYPE = ExchangeType.topic  # Valid exchange type
+
+        event = TestEvent(warren=self.warren, test="data")
+
+        # Now make TOPIC invalid to hit line 297
+        # The fire method checks: if not isinstance(topic, str)
+        event.TOPIC = None  # type: ignore
+
+        with pytest.raises(ValueError, match="TOPIC must be a string"):
+            event.fire()
+
+    def test_serialize_uuid_convert_function_coverage(self):
+        """Test the uuid_convert function inside serialize method."""
+        from datetime import datetime
+
+        # Test with UUID (should hit line 268: return o.hex)
+        event = BaseEvent(
+            warren=self.warren, uuid_val=UUID("12345678-1234-5678-1234-567812345678")
+        )
+
+        # Test with non-serializable object (should hit the return str(o) branch)
+        event.data["datetime_val"] = datetime(2023, 1, 1, 12, 0, 0)
+
+        json_str = event.serialize()
+        data = json.loads(json_str)
+
+        # UUID should be hex
+        assert data["uuid_val"] == "12345678123456781234567812345678"
+        # datetime should be string representation
+        assert "2023-01-01 12:00:00" in data["datetime_val"]
+
+    def test_fire_with_invalid_exchange_type_attribute(self):
+        """Test fire method when EXCHANGE_TYPE is somehow invalid after validation."""
+        # This line might be unreachable in normal circumstances due to the fallback logic,
+        # but we'll try to test it by creating a very specific scenario
+
+        class TestEvent(BaseEvent):
+            TOPIC = "test.topic"
+            EXCHANGE = "test_exchange"
+            EXCHANGE_TYPE = ExchangeType.topic
+
+        event = TestEvent(warren=self.warren, test="data")
+
+        # Create a mock object that looks like ExchangeType but isn't
+        class FakeExchangeType:
+            pass
+
+        # Monkey patch the isinstance function temporarily to test the validation
+        original_isinstance = __builtins__["isinstance"]
+
+        def patched_isinstance(obj, type_or_tuple):
+            # For the first call (in the initial if condition), return True
+            # For the second call (the validation), return False to trigger the error
+            if obj is event.EXCHANGE_TYPE and type_or_tuple is ExchangeType:
+                # Use a counter to differentiate between calls
+                if not hasattr(patched_isinstance, "call_count"):
+                    patched_isinstance.call_count = 0
+                patched_isinstance.call_count += 1
+
+                # Return True for the first check (so we skip the fallback logic)
+                # Return False for the second check (to trigger the validation error)
+                return patched_isinstance.call_count == 1
+
+            return original_isinstance(obj, type_or_tuple)
+
+        try:
+            __builtins__["isinstance"] = patched_isinstance
+            with pytest.raises(ValueError, match="EXCHANGE_TYPE should be valid"):
+                event.fire()
+        finally:
+            __builtins__["isinstance"] = original_isinstance
+
+
+class TestBaseReceivedEventCoverageEdgeCases:
+    """Test edge cases for BaseReceivedEvent to improve coverage."""
+
+    def test_properties_setter_and_getter(self):
+        """Test setting and getting event properties (lines 621, 627)."""
+        event = BaseReceivedEvent(data={"test": "data"})
+        test_properties = {"delivery_mode": 2, "timestamp": 1234567890}
+
+        # Test setter (line 621)
+        event.properties = test_properties
+        # Test getter
+        assert event.properties == test_properties
+
+    def test_exchange_name_property_empty(self):
+        """Test exchange_name property when EXCHANGE is None/empty (line 637)."""
+        event = BaseReceivedEvent(data={"test": "data"})
+        # EXCHANGE is None by default, so this tests the empty string return (line 637)
+        assert event.exchange_name == ""
+
+        class TestEvent(BaseReceivedEvent):
+            EXCHANGE = ""
+
+        event2 = TestEvent(data={"test": "data"})
+        assert event2.exchange_name == ""
+
+    def test_topic_property_empty(self):
+        """Test topic property when TOPIC is None/empty (line 645)."""
+        event = BaseReceivedEvent(data={"test": "data"})
+        # TOPIC is None by default, so this tests the empty string return (line 645)
+        assert event.topic == ""
+
+        class TestEvent(BaseReceivedEvent):
+            TOPIC = ""
+
+        event2 = TestEvent(data={"test": "data"})
+        assert event2.topic == ""
+
+    def test_ack_event_failure(self):
+        """Test ack_event when acknowledgment fails (line 778)."""
+        event = BaseReceivedEvent(data={"test": "data"})
+        mock_channel = Mock()
+        mock_method = Mock()
+        mock_method.delivery_tag = 123
+
+        # Mock the channel to raise an exception (line 778)
+        mock_channel.basic_ack.side_effect = Exception("Network error")
+
+        event._channel = mock_channel
+        event._method = mock_method
+
+        with pytest.raises(RuntimeError, match="Failed to acknowledge message"):
+            event.ack_event()
+
+    def test_ack_event_no_channel_or_method(self):
+        """Test ack_event when channel or method is None (lines 785-786)."""
+        event = BaseReceivedEvent(data={"test": "data"})
+
+        # Test with both None (lines 785-786)
+        with pytest.raises(RuntimeError, match="Cannot acknowledge event"):
+            event.ack_event()
+
+        # Test with channel but no method
+        event._channel = Mock()
+        event._method = None
+        with pytest.raises(RuntimeError, match="Cannot acknowledge event"):
+            event.ack_event()
+
+
+class TestDataObjectCoverageEdgeCases:
+    """Test edge cases for DataObject to improve coverage."""
+
+    def test_getitem_with_invalid_data_types(self):
+        """Test __getitem__ when _data is not a dictionary (line 1002)."""
+        # We need to create a DataObject and then manually set invalid data
+        data_obj = DataObject({})
+
+        # Manually set _data to something invalid to test the TypeError branch
+        data_obj._data = "not a dict"  # type: ignore
+
+        with pytest.raises(
+            TypeError, match="Event data is not a dictionary or is empty"
+        ):
+            data_obj["key"]
+
+        # Test with None data
+        data_obj._data = None  # type: ignore
+        with pytest.raises(
+            TypeError, match="Event data is not a dictionary or is empty"
+        ):
+            data_obj["key"]

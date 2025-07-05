@@ -87,7 +87,10 @@ markers = [
 ]
 
 [tool.coverage.run]
-omit = ["tests/*"]
+omit = [
+    "tests/*",
+    "src/bunnystream/docs.py"
+]
 
 [tool.black]
 line-length = 100

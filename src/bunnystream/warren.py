@@ -770,11 +770,16 @@ class Warren:
         # Set up consumption for each event class
         for event_class in event_classes:
             # Validate event class has required attributes
-            if not hasattr(event_class, "EXCHANGE") or not hasattr(
-                event_class, "TOPIC"
+            if (
+                not hasattr(event_class, "EXCHANGE")
+                or event_class.EXCHANGE is None
+                or event_class.EXCHANGE == ""
+                or not hasattr(event_class, "TOPIC")
+                or event_class.TOPIC is None
+                or event_class.TOPIC == ""
             ):
                 raise ValueError(
-                    f"Event class {event_class.__name__} must define EXCHANGE and TOPIC attributes"
+                    f"Event class {event_class.__name__} must have non-empty EXCHANGE and TOPIC"
                 )
 
             exchange_name = event_class.EXCHANGE or ""
